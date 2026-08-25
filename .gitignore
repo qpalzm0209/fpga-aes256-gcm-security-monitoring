@@ -29,13 +29,9 @@ secrets.*
 **/runtime/
 
 # Historical experiments and vendored repositories
-02. 젯슨/02. 젯슨/00. 초기 통합 및 AI 실험 계보/
+attacker/archive/
+fpga/archive/
 **/third_party/
-
-# Duplicates bundled inside the FPGA release archive
-**/current-source/**/Jetson_Dashboard/
-**/current-source/**/PC_RX_UI/
-**/current-source/**/STM32_NUCLEO_F411/
 
 # FPGA build products
 *.bit

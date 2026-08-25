@@ -25,8 +25,8 @@ PCam
 
 관련 구현:
 
-- `03. 대시보드/03. 대시보드/젯슨 대시보드/tamper/`
-- `03. 대시보드/03. 대시보드/젯슨 대시보드/backend/`
+- `dashboard/jetson/tamper/`
+- `dashboard/jetson/backend/`
 
 ## 3. 리플레이 공격
 
@@ -35,7 +35,7 @@ PCam
 3. RX가 session ID, frame ID, packet ID와 순서를 기준으로 재전송을 탐지합니다.
 4. 대시보드에서 Replay 단계와 탐지 이벤트를 확인합니다.
 
-관련 구현: `03. 대시보드/03. 대시보드/젯슨 대시보드/replay/`
+관련 구현: `dashboard/jetson/replay/`
 
 ## 4. 취약 키 검색 시연
 
@@ -48,8 +48,8 @@ PCam
 
 관련 구현:
 
-- `03. 대시보드/03. 대시보드/젯슨 대시보드/bruteforce/`
-- `03. 대시보드/03. 대시보드/젯슨 대시보드/local-vlm-test/`
+- `dashboard/jetson/bruteforce/`
+- `dashboard/jetson/local-vlm-test/`
 
 이 시나리오는 제한된 시드 엔트로피의 취약성을 보여주기 위한 것으로, 일반적인 AES-256 키 공간에 대한 전수공격 결과가 아닙니다.
 
@@ -73,4 +73,3 @@ PC Dashboard는 RX HDMI 캡처, RX UART 보안 텔레메트리, 공격 타임라
 | TX | 1,280개 패킷의 Ciphertext/AAD/TAG, 출력 stall 안정성 | PASS |
 | RX | 정상, TAG/Ciphertext 변조, 복귀, Replay, Sequence, Session, Timeout | 8개 시나리오 PASS |
 | 시스템 | 실시간 암·복호화 영상, 공격 이벤트, 관제 UI, 로컬 VLM | 실기 확인 |
-

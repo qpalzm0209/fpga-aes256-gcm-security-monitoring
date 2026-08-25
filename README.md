@@ -35,11 +35,11 @@ RX 관제 UI는 영상 수신 상태와 FPS, 프레임 드롭, GCM 인증 실패
 
 | 번호 | 역할 | 주요 내용 | 위치 |
 |---:|---|---|---|
-| 01 | FPGA 암호화 엔진·임베디드 Linux | AES-256-GCM TX/RX RTL, GHASH, AXI-Stream 패킷 처리, PetaLinux 레시피, 카메라 드라이버 패치, 세션 제어 | [`01. zybo_fpga.../01. zybo_fpga`](./01.%20zybo_fpga-20260825T122346Z-1-001/01.%20zybo_fpga/) |
-| 02 | 중간자 공격자 | Jetson 2-NIC L2 브리지, 패킷 관찰, 변조·리플레이·취약 키 검색 시연 | [`02. 젯슨/02. 젯슨`](./02.%20젯슨/02.%20젯슨/) |
-| 03 | 보안 관제 UI | Jetson 공격 대시보드, PC 영상·UART 관제 UI, 이벤트 로그, 로컬 VLM 분석 | [`03. 대시보드/03. 대시보드`](./03.%20대시보드/03.%20대시보드/) |
+| 01 | FPGA 암호화 엔진·임베디드 Linux | AES-256-GCM TX/RX RTL, GHASH, AXI-Stream 패킷 처리, PetaLinux 레시피, 카메라 드라이버 패치, 세션 제어 | [`fpga/`](./fpga/) |
+| 02 | 중간자 공격자 | Jetson 2-NIC L2 브리지, 패킷 관찰, 변조·리플레이·취약 키 검색 시연 | [`attacker/`](./attacker/) |
+| 03 | 보안 관제 UI | Jetson 공격 대시보드, PC 영상·UART 관제 UI, 이벤트 로그, 로컬 VLM 분석 | [`dashboard/`](./dashboard/) |
 
-공격 엔진은 대시보드 백엔드와 한 배포 단위로 동작하므로 실제 런타임 소스는 `03. 대시보드/03. 대시보드/젯슨 대시보드/{tamper,replay,bruteforce}`에 있습니다. `02. 젯슨`은 공격자가 통신 경로에 들어가기 위한 네트워크 구성과 운용 절차를 담당합니다.
+공격 엔진은 대시보드 백엔드와 한 배포 단위로 동작하므로 실제 런타임 소스는 `dashboard/jetson/{tamper,replay,bruteforce}`에 있습니다. `attacker/`는 공격자가 통신 경로에 들어가기 위한 네트워크 구성과 운용 절차를 담당합니다.
 
 ## 동작 흐름
 
@@ -75,14 +75,14 @@ RX 관제 UI는 영상 수신 상태와 FPS, 프레임 드롭, GCM 인증 실패
 ### 1. Jetson L2 브리지
 
 ```bash
-cd "02. 젯슨/02. 젯슨/1. jetson_bridge"
+cd attacker/bridge
 sudo ./scripts/apply_br_video.sh
 ```
 
 ### 2. Jetson 보안 대시보드
 
 ```bash
-cd "03. 대시보드/03. 대시보드/젯슨 대시보드"
+cd dashboard/jetson
 ./operator/start-dashboard.sh
 ```
 
@@ -93,12 +93,12 @@ cd "03. 대시보드/03. 대시보드/젯슨 대시보드"
 Windows에서 다음 파일을 실행합니다.
 
 ```text
-03. 대시보드\03. 대시보드\PC 대시보드\run_pc_ui.bat
+dashboard\pc\run_pc_ui.bat
 ```
 
 접속 주소: `http://127.0.0.1:8765/`
 
-FPGA Vivado/PetaLinux 빌드 및 SD/JTAG 절차는 [01번 모듈 README](./01.%20zybo_fpga-20260825T122346Z-1-001/01.%20zybo_fpga/README.md)에 정리했습니다.
+FPGA Vivado/PetaLinux 빌드 및 SD/JTAG 절차는 [`fpga/README.md`](./fpga/README.md)에 정리했습니다.
 
 ## 보안 및 대용량 파일 정책
 
