@@ -1,7 +1,7 @@
 # FPGA AES-256-GCM 영상 보안 관제 시스템
 
 Zybo Z7-20 FPGA에서 카메라 영상을 실시간으로 암호화·복호화하고, 전송 구간에 삽입된 Jetson Orin Nano가 보안 공격을 재현하며, PC/Jetson 대시보드가 이상 징후와 복호화 결과를 관제하는 통합 프로젝트입니다.  
-** 발표자료 https://docs.google.com/presentation/d/1HjA0ZMDuBZIXOYn5PD28V0yZUvQiaGDm/edit?usp=drive_link&ouid=109859909347508496274&rtpof=true&sd=true **  
+/* 발표자료 https://docs.google.com/presentation/d/1HjA0ZMDuBZIXOYn5PD28V0yZUvQiaGDm/edit?usp=drive_link&ouid=109859909347508496274&rtpof=true&sd=true */  
 
 ## 시스템 구성
 
