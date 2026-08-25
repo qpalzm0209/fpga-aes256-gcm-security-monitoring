@@ -1,0 +1,52 @@
+/include/ "system-conf.dtsi"
+
+/ {
+    usb_phy0: usb-phy@0 {
+        compatible = "ulpi-phy";
+        #phy-cells = <0>;
+        reg = <0xe0002000 0x1000>;
+        view-port = <0x0170>;
+        drv-vbus;
+    };
+
+    reserved-memory {
+        #address-cells = <1>;
+        #size-cells = <1>;
+        ranges;
+
+        aes_gcm_rx_buffers: buffer@18000000 {
+            reg = <0x18000000 0x02000000>;
+            no-map;
+        };
+    };
+};
+
+&usb0 {
+    status = "okay";
+    dr_mode = "host";
+    usb-phy = <&usb_phy0>;
+};
+
+/* Do not mark the AXI DMA dma-coherent.  DMA-BUF begin/end access must issue
+ * the cache maintenance required between the CPU packet assembler and PL. */
+
+/* AXI DMA is owned by the Linux DMAengine driver.  The userspace receiver
+ * passes CMA DMA-BUFs through /dev/pcam_aes_bridge instead of programming
+ * this register block through /dev/mem. */
+&axi_dma_packet {
+    status = "okay";
+};
+
+&amba_pl {
+    aes_gcm_rx_bridge: aes-gcm-bridge {
+        compatible = "kccistc,pcam-aes-gcm-bridge-1.0";
+        dmas = <&axi_dma_packet 0>, <&axi_dma_packet 1>;
+        dma-names = "tx", "rx";
+        status = "okay";
+    };
+};
+
+/* The userspace HDMI controller still owns the display VDMA registers. */
+&axi_vdma_display {
+    status = "disabled";
+};

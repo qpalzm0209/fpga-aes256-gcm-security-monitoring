@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#070b0e" />
+    <title>Secure Video Receiver Console</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="occ-locked">
+    <header class="topbar">
+      <div class="brand">
+        <strong>SECURE RECEIVER</strong>
+        <span>AES-256-GCM VIDEO SECURITY CONSOLE</span>
+      </div>
+      <button id="eventLogButton" class="event-log-button" type="button" aria-expanded="false" aria-controls="eventLogDrawer"><b>▤</b> 이벤트 로그</button>
+      <nav class="page-tabs" aria-label="Dashboard views">
+        <button class="page-tab active" data-page="live"><b>01</b> LIVE RECEIVER</button>
+        <button class="page-tab" data-page="analysis"><b>02</b> SECURITY ANALYSIS</button>
+      </nav>
+      <div class="top-status">
+        <span id="globalAttack" class="status-chip">ATTACK NONE</span>
+        <span id="rxStatus" class="status-chip">RX WAIT</span>
+        <span id="videoStatus" class="status-chip">VIDEO WAIT</span>
+        <span id="jetsonStatus" class="status-chip">JETSON WAIT</span>
+        <span id="aiFocusStatus" class="ai-focus-top" hidden>● GEMINI FOCUS ACTIVE</span>
+        <button id="askAiButton" class="ask-ai-button" type="button" aria-expanded="false" aria-controls="aiInteraction"><b>✦</b> AI 질문</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section id="eventLogDrawer" class="event-log-drawer" aria-live="polite" hidden>
+        <article class="event-log-panel">
+          <header class="event-log-header">
+            <div><span>EVENT LOG</span><strong>세션 이벤트 기록</strong><small id="eventLogSessionDate">—</small></div>
+            <button id="eventLogCloseButton" type="button" aria-label="이벤트 로그 닫기">×</button>
+          </header>
+          <div class="event-log-summary"><span id="eventLogSessionStart">세션 시작 · —</span><b id="eventLogCount">이벤트 0건</b></div>
+          <nav class="event-log-filters" aria-label="이벤트 로그 필터">
+            <button class="active" type="button" data-event-filter="all">전체</button>
+            <button type="button" data-event-filter="attack">공격</button>
+            <button type="button" data-event-filter="security">보안</button>
+            <button type="button" data-event-filter="video">영상</button>
+            <button type="button" data-event-filter="rx">RX</button>
+            <button type="button" data-event-filter="system">시스템</button>
+          </nav>
+          <section id="eventLogList" class="event-log-list" aria-label="세션 전체 이벤트 기록"></section>
+        </article>
+      </section>
+      <section class="page-stack">
+        <section id="livePage" class="dashboard-page active" aria-label="Live receiver">
+          <article class="panel video-panel">
+            <header class="panel-header video-header">
+              <div class="title-block"><span>RX HDMI CAPTURE</span><strong>LIVE RX VIDEO</strong></div>
+              <div class="video-controls">
+                <select id="deviceSelect" aria-label="Video input device"></select>
+                <button id="startButton" type="button">START VIDEO</button>
+              </div>
+            </header>
+            <div class="video-stage">
+              <video id="video" autoplay muted playsinline aria-label="Live Zybo RX HDMI capture"></video>
+              <div class="video-hud hud-top"><span id="videoLiveLabel">WAITING</span><strong>RX-01 / HDMI</strong></div>
+              <div class="video-hud hud-bottom"><span id="deviceName">NO DEVICE</span><strong id="inputFormat">1280 × 720 TARGET</strong></div>
+              <p id="videoMessage" class="video-message">SELECT USB HDMI CAPTURE</p>
+              <div id="securityOverlay" class="security-overlay" aria-live="assertive"><strong></strong><span></span></div>
+              <section id="occLock" class="occ-lock" aria-label="OCC authentication lock">
+                <div class="occ-door left" aria-hidden="true"></div>
+                <div class="occ-door right" aria-hidden="true"></div>
+                <div class="occ-scan-frame" aria-hidden="true"><span></span><span></span><span></span><span></span><i></i></div>
+                <header><span>OCC ACCESS CONTROL</span><b id="occConnection">UART WAIT</b></header>
+                <div class="occ-message">
+                  <span>OPTICAL CAMERA COMMUNICATION</span>
+                  <strong id="occTitle">OCC PASSWORD AUTHENTICATION</strong>
+                  <div><small>RECOGNIZED PASSWORD</small><b id="occCredential">----</b></div>
+                  <p id="occDetail">WAITING FOR RX BOARD VERDICT</p>
+                </div>
+                <footer><span>RX BOARD RESULT</span><strong id="occVerdict">WAITING</strong></footer>
+              </section>
+            </div>
+          </article>
+
+          <section class="live-summary">
+            <article class="panel attack-summary">
+              <header class="panel-header"><div class="title-block"><span>JETSON / TAILSCALE</span><strong id="attackPanelTitle">ATTACK</strong></div><b id="attackBadge" class="mini-status">WAITING</b></header>
+              <div class="attack-summary-body">
+                <div class="attack-primary"><span id="attackActivity">ATTACK STATUS</span><strong id="attackMode">NONE</strong><small id="attackCaption">NO ATTACK OBSERVED</small></div>
+                <dl class="compact-metrics">
+                  <div><dt>RATE</dt><dd id="attackRate">—</dd></div>
+                  <div><dt id="attackCountLabel">COUNT</dt><dd id="attackCount">—</dd></div>
+                  <div><dt>RUNTIME</dt><dd id="attackRuntime">—</dd></div>
+                  <div><dt>LAST TARGET</dt><dd id="attackTarget">—</dd></div>
+                </dl>
+              </div>
+            </article>
+
+            <article class="panel receiver-summary">
+              <header class="panel-header"><div class="title-block"><span>RX UART / GROUND TRUTH</span><strong>RECEIVER SECURITY STATE</strong></div><b id="securityVerdict" class="mini-status">WAITING</b></header>
+              <div class="receiver-summary-body">
+                <dl class="receiver-core">
+                  <div><dt>SESSION</dt><dd id="sessionState">WAITING</dd><small id="sessionId">—</small></div>
+                  <div><dt>VALID FPS</dt><dd id="validFps">—</dd><small id="attemptFps">ATTEMPT —</small></div>
+                </dl>
+                <div id="compactDetectors" class="compact-detectors" aria-label="Receiver detector status">
+                  <div data-detector="tag"><b>TAG</b><strong>정상</strong><span id="tagTotal">FAIL 0</span></div>
+                  <div data-detector="replay"><b>REPLAY</b><strong>정상</strong><span id="replayTotal">REJECT 0</span></div>
+                  <div data-detector="sequence"><b>SEQUENCE</b><strong>정상</strong><span id="sequenceTotal">ERROR 0</span></div>
+                  <div data-detector="session"><b>SESSION</b><strong>정상</strong><span id="sessionTotal">ERROR 0</span></div>
+                  <div data-detector="timeout"><b>TIMEOUT</b><strong>정상</strong><span id="timeoutTotal">ERROR 0</span></div>
+                </div>
+              </div>
+            </article>
+          </section>
+        </section>
+
+        <section id="analysisPage" class="dashboard-page" aria-label="Security analysis">
+          <section id="analysisOccLock" class="occ-lock analysis-occ-lock" aria-label="Security analysis OCC lock animation">
+            <div class="occ-door left" aria-hidden="true"></div>
+            <div class="occ-door right" aria-hidden="true"></div>
+            <div class="occ-scan-frame" aria-hidden="true"><span></span><span></span><span></span><span></span><i></i></div>
+          </section>
+          <section class="analysis-kpis">
+            <article class="kpi"><span id="kpiAttackLabel">ATTACK</span><strong id="kpiAttack">NONE</strong><small id="kpiAttackDetail">JETSON OBSERVER</small></article>
+            <article class="kpi"><span>유효 FPS</span><strong id="kpiValidFps">—</strong><small id="kpiAttemptFps">ATTEMPT —</small></article>
+            <article class="kpi"><span>프레임 드롭</span><strong id="kpiFrameDrop">—</strong><small>RX UART</small></article>
+            <article id="kpiAuthRejectCard" class="kpi kpi-auth-reject"><span>GCM AUTH FAIL</span><strong id="kpiAuthRejectCount">—</strong><small id="kpiAuthRejectWindow">최근 1초</small><small id="kpiAuthRejectDetail">누적 —건</small><small id="kpiAuthRejectRate">— 건/s</small></article>
+            <article class="kpi kpi-auth-reject"><span>REPLAY REJECT</span><strong id="kpiReplayReject">—</strong><small id="kpiReplayWindow">최근 1초</small><small id="kpiReplayTotal">누적 —건</small><small id="kpiReplayRate">— 건/s</small></article>
+          </section>
+
+          <section class="analysis-grid">
+            <article class="panel chart-card chart-wide">
+              <header class="panel-header"><div class="title-block"><span>30 SEC LIVE WINDOW</span><strong>유효 FPS vs ATTEMPT FPS</strong></div><div class="legend"><span class="attempt">ATTEMPT</span><span class="valid">VALID</span></div></header>
+              <canvas id="fpsChart" aria-label="Valid and attempt FPS graph"></canvas>
+            </article>
+            <article class="panel chart-card">
+              <header class="panel-header"><div class="title-block"><span>RX UART</span><strong>프레임 드롭</strong></div><b>%</b></header>
+              <canvas id="dropChart" aria-label="Frame drop graph"></canvas>
+            </article>
+            <article class="panel chart-card">
+              <header class="panel-header"><div class="title-block"><span>RX UART</span><strong>프레임 지터</strong></div><b>ms</b></header>
+              <canvas id="jitterChart" aria-label="Frame jitter graph"></canvas>
+            </article>
+            <article class="panel chart-card chart-wide">
+              <header class="panel-header"><div class="title-block"><span>RX UART · ~1 SEC ROLLING WINDOW</span><strong>보안 거부 발생률</strong></div><div class="legend"><span class="auth">AUTH /s</span><span class="replay">REPLAY /s</span></div></header>
+              <canvas id="rejectChart" aria-label="Authentication and replay rejects per second"></canvas>
+            </article>
+
+            <article class="panel analysis-detectors">
+              <header class="panel-header"><div class="title-block"><span>PL SOURCE · 0x41220000</span><strong>보안 탐지 상태</strong></div><b class="semantic-key">최근 / 누적</b></header>
+              <div id="analysisDetectorList" class="detector-list"></div>
+            </article>
+
+            <article class="panel correlation-panel">
+              <header class="panel-header"><div class="title-block"><span>ACTUAL IDENTIFIERS ONLY</span><strong>공격 ↔ RX 이벤트 연관성</strong></div></header>
+              <div class="correlation-flow">
+                <section><span>JETSON ATTACK</span><strong id="corrAttackMode">—</strong><dl><div><dt>FRAME</dt><dd id="corrAttackFrame">—</dd></div><div><dt>PACKET</dt><dd id="corrAttackPacket">—</dd></div></dl></section>
+                <div class="correlation-link"><span></span><div class="correlation-status"><small>최근 판정</small><b id="correlationText">확인 중</b><small>Frame / Packet 기준</small></div><span></span></div>
+                <section><span>RX SECURITY EVENT</span><strong id="corrEventType">—</strong><dl><div><dt>FRAME</dt><dd id="corrEventFrame">—</dd></div><div><dt>PACKET</dt><dd id="corrEventPacket">—</dd></div></dl></section>
+              </div>
+            </article>
+
+            <article class="panel health-panel">
+              <header class="panel-header"><div class="title-block"><span>RX UART · 최근 / 누적</span><strong>수신 상태 카운터</strong></div></header>
+              <dl class="health-grid">
+                <div><dt>NETWORK LOSS</dt><dd id="healthNetwork">—</dd></div><div><dt>QUEUE OVERRUN</dt><dd id="healthQueue">—</dd></div>
+                <div><dt>STALE DROP</dt><dd id="healthStale">—</dd></div><div><dt>STATUS FAILURE</dt><dd id="healthStatus">—</dd></div>
+                <div><dt>처리 프레임 누적</dt><dd id="healthProcessed">—</dd></div>
+              </dl>
+            </article>
+
+            <article class="panel event-panel">
+              <header class="panel-header"><div class="title-block"><span>RX UART</span><strong>최근 보안 이벤트</strong></div></header>
+              <div class="event-name" id="eventType">WAITING</div>
+              <dl class="event-grid">
+                <div><dt>FRAME</dt><dd id="eventFrame">—</dd></div><div><dt>PACKET</dt><dd id="eventPacket">—</dd></div>
+                <div><dt>SESSION</dt><dd id="eventSession">—</dd></div><div><dt>RX 처리</dt><dd id="eventOutcome">—</dd></div>
+              </dl>
+            </article>
+          </section>
+
+          <article class="panel timeline-panel">
+            <header class="panel-header"><div class="title-block"><span>LAST 60 SEC · LIVE EVENTS</span><strong>보안 이벤트 타임라인</strong></div><b id="timelineStatus" class="semantic-key">대기</b></header>
+            <div class="timeline-stage">
+              <canvas id="securityTimeline" aria-label="Jetson attack and RX security detector event timeline"></canvas>
+              <div id="timelineEmpty" class="timeline-empty">NO RECENT SECURITY EVENTS</div>
+              <div id="timelineTooltip" class="timeline-tooltip hidden" role="tooltip"></div>
+            </div>
+          </article>
+        </section>
+      </section>
+
+      <section id="aiInteraction" class="ai-drawer" aria-live="polite" hidden>
+        <article id="aiAnalysisCard" class="ai-drawer-panel panel" aria-labelledby="aiAnalysisTitle">
+          <header class="ai-drawer-header">
+            <div class="ai-drawer-title"><span>GEMINI LIVE</span><strong id="aiAnalysisTitle">보안 시스템 어시스턴트</strong><small id="aiConnectionStatus">● 연결 확인 중</small></div>
+            <div class="ai-card-status"><b id="aiState" class="mini-status live">대기 중</b><button id="aiCloseButton" type="button" aria-label="Gemini 패널 닫기">×</button></div>
+            <div class="ai-compact-context"><span>● RX Telemetry</span><span>● Security Events</span><span>● Attack State</span></div>
+          </header>
+
+          <section id="aiChatHistory" class="ai-chat-history" aria-label="Gemini 대화 기록">
+            <section id="aiAnalyzingPanel" class="ai-analyzing-panel" hidden>
+              <span>● Gemini 분석 중...</span>
+              <ul id="aiContextList"></ul>
+            </section>
+            <section id="aiConversation" class="ai-conversation" aria-label="Gemini 대화">
+              <div id="aiEmptyConversation" class="ai-conversation-empty">음성이나 텍스트로 자유롭게 질문하세요.</div>
+            </section>
+          </section>
+
+          <footer id="aiComposer" class="ai-composer">
+            <section class="ai-quick-questions" aria-label="빠른 질문">
+              <div class="ai-composer-heading"><strong>빠른 질문</strong><button id="aiClearFocus" type="button" disabled>강조 해제</button></div>
+              <div>
+                <button type="button" data-ai-query="summary">현재 상태</button>
+                <button type="button" data-ai-query="correlation">최근 공격</button>
+                <button type="button" data-ai-query="performance">성능 원인</button>
+                <button type="button" data-ai-query="risk">보안 이벤트</button>
+                <button type="button" data-ai-query="timeline">최근 30초 요약</button>
+              </div>
+            </section>
+
+            <section id="aiVoiceStage" class="ai-voice-stage" data-state="idle" aria-live="polite">
+              <div id="aiVoiceIdle" class="ai-voice-panel ai-voice-idle">
+                <button id="aiMicButton" class="ai-voice-primary" type="button" aria-label="음성 질문 시작" title="음성 질문">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm-5-3a1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21H8a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-2.08A7 7 0 0 0 19 12a1 1 0 1 0-2 0 5 5 0 0 1-10 0Z"/></svg>
+                </button>
+                <strong>음성 질문</strong>
+                <span>눌러서 질문</span>
+              </div>
+              <div id="aiVoiceListening" class="ai-voice-panel ai-voice-listening" hidden>
+                <strong class="ai-voice-status"><i></i>듣는 중...</strong>
+                <div class="ai-waveform" aria-label="음성 입력 파형">
+                  <span class="ai-wave-bar"></span><span class="ai-wave-bar"></span><span class="ai-wave-bar"></span><span class="ai-wave-bar"></span>
+                  <span class="ai-wave-bar"></span><span class="ai-wave-bar"></span><span class="ai-wave-bar"></span><span class="ai-wave-bar"></span>
+                </div>
+                <blockquote id="aiVoiceTranscript">“말씀해 주세요...”</blockquote>
+                <button id="aiVoiceStop" type="button">인식 완료</button>
+              </div>
+              <div id="aiVoiceComplete" class="ai-voice-panel ai-voice-complete" hidden>
+                <strong>✓ 음성 인식 완료</strong>
+                <blockquote id="aiVoiceFinalTranscript">“최근 공격 상태를 설명해줘.”</blockquote>
+                <div><button id="aiVoiceRetry" type="button">다시 녹음</button><button id="aiVoiceSubmit" type="button">질문하기</button></div>
+              </div>
+              <div id="aiVoiceAnalyzing" class="ai-voice-panel ai-voice-analyzing" hidden>
+                <strong><i></i>Gemini 분석 중<span class="ai-processing-dots"><b></b><b></b><b></b></span></strong>
+                <p>현재 시스템 데이터를 확인하고 있습니다.</p>
+              </div>
+            </section>
+
+            <form id="aiQuestionForm" class="ai-question-form">
+              <div class="ai-input-shell">
+                <input id="aiQuestionInput" type="text" autocomplete="off" placeholder="직접 입력할 수도 있습니다..." aria-label="Gemini에게 직접 입력" />
+              </div>
+              <button class="ai-send-button" type="submit">전송</button>
+            </form>
+            <div class="ai-composer-status"><span id="aiComposerStatus">텍스트 또는 음성으로 질문</span><time id="aiLastUpdated">—</time></div>
+            <small>GEMINI API · MICROPHONE · LIVE CONTEXT</small>
+          </footer>
+        </article>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

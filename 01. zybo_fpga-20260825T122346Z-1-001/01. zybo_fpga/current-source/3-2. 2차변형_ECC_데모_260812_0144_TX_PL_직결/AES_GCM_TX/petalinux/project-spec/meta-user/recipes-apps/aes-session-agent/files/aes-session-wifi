@@ -1,0 +1,241 @@
+#!/bin/sh
+
+CONF=${AES_SESSION_WIFI_CONF:-/etc/aes-session/wpa.conf}
+PID=${AES_SESSION_WIFI_PIDFILE:-/var/run/aes-session-wpa.pid}
+INTERFACE_FILE=${AES_SESSION_WIFI_INTERFACE_FILE:-/var/run/aes-session-wifi.interface}
+IDENTITY_FILE=${AES_SESSION_WIFI_IDENTITY_FILE:-$INTERFACE_FILE.identity}
+SYS_CLASS_NET=${AES_SESSION_SYS_CLASS_NET:-/sys/class/net}
+WPA_CTRL_DIR=${AES_SESSION_WPA_CTRL_DIR:-/var/run/wpa_supplicant}
+WPA_SUPPLICANT=${AES_SESSION_WPA_SUPPLICANT:-wpa_supplicant}
+WPA_CLI=${AES_SESSION_WPA_CLI:-wpa_cli}
+IP=${AES_SESSION_IP:-ip}
+UDHCPC=${AES_SESSION_UDHCPC:-udhcpc}
+FIND_ATTEMPTS=${AES_SESSION_WIFI_FIND_ATTEMPTS:-30}
+ASSOC_ATTEMPTS=${AES_SESSION_WIFI_ASSOC_ATTEMPTS:-30}
+USB_RECOVERY_AFTER=${AES_SESSION_USB_RECOVERY_AFTER:-5}
+USB_PLATFORM_DRIVER=${AES_SESSION_USB_PLATFORM_DRIVER:-/sys/bus/platform/drivers/ci_hdrc}
+USB_PLATFORM_DEVICE=${AES_SESSION_USB_PLATFORM_DEVICE:-ci_hdrc.0}
+USB_PLATFORM_DEVICES=${AES_SESSION_USB_PLATFORM_DEVICES:-/sys/bus/platform/devices}
+USB_RECOVERY_HOOK=${AES_SESSION_USB_RECOVERY_HOOK:-}
+
+find_wifi() {
+    for path in "$SYS_CLASS_NET"/wl*; do
+        [ -e "$path" ] || continue
+        basename "$path"
+        return 0
+    done
+    return 1
+}
+
+recover_usb_host() {
+    if [ -n "$USB_RECOVERY_HOOK" ]; then
+        "$USB_RECOVERY_HOOK"
+        return $?
+    fi
+    [ -e "$USB_PLATFORM_DEVICES/$USB_PLATFORM_DEVICE" ] || return 1
+    [ -w "$USB_PLATFORM_DRIVER/unbind" ] || return 1
+    [ -w "$USB_PLATFORM_DRIVER/bind" ] || return 1
+    echo "USB Wi-Fi device was not enumerated; resetting USB host controller"
+    if [ -e "$USB_PLATFORM_DRIVER/$USB_PLATFORM_DEVICE" ]; then
+        printf '%s' "$USB_PLATFORM_DEVICE" >"$USB_PLATFORM_DRIVER/unbind" || return 1
+        sleep 2
+    fi
+    printf '%s' "$USB_PLATFORM_DEVICE" >"$USB_PLATFORM_DRIVER/bind" || return 1
+    # Let udev finish firmware loading and assign the persistent wl* name.
+    sleep 5
+}
+
+read_wpa_pid() {
+    [ -r "$PID" ] || return 1
+    wifi_pid="$(cat "$PID" 2>/dev/null)" || return 1
+    case "$wifi_pid" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "$wifi_pid" -gt 1 ] || return 1
+    printf '%s\n' "$wifi_pid"
+}
+
+wpa_pid_is_alive() {
+    wifi_pid="$(read_wpa_pid)" || return 1
+    kill -0 "$wifi_pid" 2>/dev/null || return 1
+    # Do not signal an unrelated process if a stale pidfile was reused.
+    if [ -r "/proc/$wifi_pid/cmdline" ]; then
+        process_name=${WPA_SUPPLICANT##*/}
+        tr '\000' ' ' <"/proc/$wifi_pid/cmdline" 2>/dev/null |
+            grep -F "$process_name" >/dev/null 2>&1 || return 1
+    fi
+}
+
+wpa_state() {
+    "$WPA_CLI" -i "$1" status 2>/dev/null |
+        sed -n 's/^wpa_state=//p' | sed -n '1p'
+}
+
+wpa_control_is_alive() {
+    "$WPA_CLI" -i "$1" ping 2>/dev/null | grep -qx 'PONG'
+}
+
+stop_wpa() {
+    stop_interface="${1:-}"
+    wifi_pid="$(read_wpa_pid 2>/dev/null || true)"
+    if [ -n "$wifi_pid" ] && wpa_pid_is_alive; then
+        [ -z "$stop_interface" ] ||
+            "$WPA_CLI" -i "$stop_interface" terminate >/dev/null 2>&1 || true
+        attempts=0
+        while kill -0 "$wifi_pid" 2>/dev/null; do
+            attempts=$((attempts + 1))
+            [ "$attempts" -lt 5 ] || break
+            sleep 1
+        done
+        if kill -0 "$wifi_pid" 2>/dev/null; then
+            kill "$wifi_pid" 2>/dev/null || true
+            sleep 1
+        fi
+        kill -0 "$wifi_pid" 2>/dev/null &&
+            kill -KILL "$wifi_pid" 2>/dev/null || true
+    fi
+    rm -f "$PID"
+    [ -z "$stop_interface" ] || rm -f "$WPA_CTRL_DIR/$stop_interface"
+}
+
+write_state_files() {
+    state_interface="$1"
+    state_ifindex="$2"
+    interface_tmp="$INTERFACE_FILE.tmp.$$"
+    identity_tmp="$IDENTITY_FILE.tmp.$$"
+    if ! printf '%s\n' "$state_interface" >"$interface_tmp" ||
+       ! printf '%s %s\n' "$state_interface" "$state_ifindex" >"$identity_tmp" ||
+       ! mv -f "$interface_tmp" "$INTERFACE_FILE" ||
+       ! mv -f "$identity_tmp" "$IDENTITY_FILE"; then
+        rm -f "$interface_tmp" "$identity_tmp"
+        return 1
+    fi
+}
+
+role_control_values() {
+    case "$1" in
+    tx)
+        local_address=169.254.77.2
+        ;;
+    rx)
+        local_address=169.254.77.3
+        ;;
+    *) return 1 ;;
+    esac
+}
+
+configure_control_link() {
+    interface="$1"
+    role="$2"
+    role_control_values "$role" || return 0
+    "$IP" addr replace "$local_address/24" dev "$interface" || return 1
+}
+
+control_link_is_configured() {
+    interface="$1"
+    role="$2"
+    role_control_values "$role" || return 0
+    "$IP" -4 addr show dev "$interface" 2>/dev/null |
+        grep -F "inet $local_address/24" >/dev/null 2>&1 || return 1
+}
+
+ensure_wpa() {
+    interface="$1"
+    previous_interface="$(cat "$INTERFACE_FILE" 2>/dev/null || true)"
+    restart_wpa=0
+    current_state=
+
+    if ! wpa_pid_is_alive || ! wpa_control_is_alive "$interface"; then
+        restart_wpa=1
+    elif [ -n "$previous_interface" ] && [ "$previous_interface" != "$interface" ]; then
+        restart_wpa=1
+    else
+        current_state="$(wpa_state "$interface")"
+        [ "$current_state" != INTERFACE_DISABLED ] || restart_wpa=1
+    fi
+
+    if [ "$restart_wpa" -ne 0 ]; then
+        stop_wpa "${previous_interface:-$interface}"
+        "$IP" link set "$interface" up || return 1
+        "$WPA_SUPPLICANT" -B -P "$PID" -i "$interface" -c "$CONF" || return 1
+    elif [ "$current_state" != COMPLETED ]; then
+        # Nudge normal AP-loss states without discarding the agent's in-memory
+        # pending ECDH capsule.
+        "$WPA_CLI" -i "$interface" reconnect >/dev/null 2>&1 || true
+    fi
+}
+
+start_wifi() {
+    role="$1"
+    count=0
+    usb_recovery_attempted=0
+    interface=
+    while [ "$count" -lt "$FIND_ATTEMPTS" ]; do
+        interface="$(find_wifi)" && break
+        count=$((count + 1))
+        if [ "$usb_recovery_attempted" -eq 0 ] &&
+           [ "$count" -ge "$USB_RECOVERY_AFTER" ]; then
+            recover_usb_host || true
+            usb_recovery_attempted=1
+        fi
+        sleep 1
+    done
+    [ -n "$interface" ] || return 1
+    "$IP" link set "$interface" up || return 1
+    ensure_wpa "$interface" || return 1
+    count=0
+    while :; do
+        current_state="$(wpa_state "$interface")"
+        [ "$current_state" != COMPLETED ] || break
+        if [ "$current_state" = INTERFACE_DISABLED ] ||
+           { [ -z "$current_state" ] &&
+             { ! wpa_pid_is_alive || ! wpa_control_is_alive "$interface"; }; }; then
+            stop_wpa "$interface"
+            return 1
+        fi
+        count=$((count + 1))
+        [ "$count" -lt "$ASSOC_ATTEMPTS" ] || return 1
+        sleep 1
+    done
+    # DHCP is useful for diagnostics/Internet access but must not gate the
+    # board-to-board key channel.  The fixed link-local unicast path below is
+    # sufficient even when the AP's lease service is temporarily unavailable.
+    "$UDHCPC" -q -n -t 3 -i "$interface" || true
+    configure_control_link "$interface" "$role" || return 1
+    ifindex="$(cat "$SYS_CLASS_NET/$interface/ifindex" 2>/dev/null)" || return 1
+    case "$ifindex" in ''|*[!0-9]*) return 1 ;; esac
+    write_state_files "$interface" "$ifindex"
+}
+
+health_wifi() {
+    role="$1"
+    interface="$(cat "$INTERFACE_FILE" 2>/dev/null)" || return 2
+    identity="$(cat "$IDENTITY_FILE" 2>/dev/null)" || return 2
+    current_ifindex="$(cat "$SYS_CLASS_NET/$interface/ifindex" 2>/dev/null)" || return 2
+    [ "$identity" = "$interface $current_ifindex" ] || return 2
+    flags="$(cat "$SYS_CLASS_NET/$interface/flags" 2>/dev/null)" || return 2
+    [ $((flags & 1)) -ne 0 ] || return 2
+    wpa_pid_is_alive || return 2
+    wpa_control_is_alive "$interface" || return 2
+    current_state="$(wpa_state "$interface")"
+    case "$current_state" in
+    COMPLETED)
+        control_link_is_configured "$interface" "$role" || return 2
+        return 0
+        ;;
+    INTERFACE_DISABLED|'') return 2 ;;
+    *) return 1 ;;
+    esac
+}
+
+case "$1" in
+start) start_wifi "${2:-}" ;;
+health) health_wifi "${2:-}" ;;
+stop)
+    previous_interface="$(cat "$INTERFACE_FILE" 2>/dev/null || true)"
+    stop_wpa "$previous_interface"
+    rm -f "$INTERFACE_FILE" "$IDENTITY_FILE"
+    ;;
+restart) role="${2:-}"; "$0" stop; "$0" start "$role" ;;
+*) echo "Usage: $0 {start|health|stop|restart} [tx|rx]" >&2; exit 1 ;;
+esac

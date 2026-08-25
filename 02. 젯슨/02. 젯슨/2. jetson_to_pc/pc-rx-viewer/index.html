@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Secure Video Receiver</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">✓</div>
+      <div class="brand-copy">
+        <h1>SECURE VIDEO RECEIVER</h1>
+        <p>ZYBO RX HDMI VIA USB CAPTURE</p>
+      </div>
+      <span id="liveStatus" class="status-badge" aria-live="polite">WAITING</span>
+    </header>
+
+    <main class="viewer-panel">
+      <div class="controls">
+        <label for="deviceSelect">VIDEO INPUT</label>
+        <select id="deviceSelect" aria-label="Video input device"></select>
+        <button id="startButton" type="button">START VIDEO</button>
+      </div>
+
+      <div class="video-stage">
+        <video
+          id="video"
+          autoplay
+          muted
+          playsinline
+          aria-label="Live Zybo RX HDMI capture"
+        ></video>
+        <p id="videoMessage" class="video-message" aria-live="polite">
+          SELECT THE USB CAPTURE DEVICE AND START VIDEO
+        </p>
+      </div>
+
+      <footer class="capture-info">
+        <div>
+          <span>INPUT DEVICE</span>
+          <strong id="deviceName">NOT SELECTED</strong>
+        </div>
+        <div>
+          <span>HDMI INPUT</span>
+          <strong id="inputFormat">—</strong>
+        </div>
+        <div>
+          <span>CAPTURE STATUS</span>
+          <strong id="captureStatus">WAITING</strong>
+        </div>
+      </footer>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

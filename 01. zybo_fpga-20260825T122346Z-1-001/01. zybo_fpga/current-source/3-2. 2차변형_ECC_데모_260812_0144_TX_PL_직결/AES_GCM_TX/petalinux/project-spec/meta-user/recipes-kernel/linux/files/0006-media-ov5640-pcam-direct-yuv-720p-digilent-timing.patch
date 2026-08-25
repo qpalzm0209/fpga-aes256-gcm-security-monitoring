@@ -1,0 +1,150 @@
+From 5f3bcb602ba8848b97d8b60c795b2fe4d6da4ed0 Mon Sep 17 00:00:00 2001
+From: OV5640 comparison <noreply@example.invalid>
+Date: Sat, 1 Aug 2026 16:30:00 +0900
+Subject: [PATCH] media: ov5640: add Digilent 720p YUV timing
+
+Digilent's validated linux-digilent 720p YUV mode used a 42 MHz sensor
+timing clock, HTS 1892 and VTS 740.  The current driver uses a 62 MHz
+timing clock, HTS 1600 and VTS 1292 in the locally patched tree.
+
+Use the Digilent timing profile only for two-lane CSI-2 720p packed YUV.
+Reuse the DVP timing geometry, request the old 336 MHz internal MIPI
+clock, force the /1 MIPI divider, and report the resulting 42 MHz pixel
+rate and 168 MHz CSI-2 link frequency.  Keep the current upstream LP11
+stream and power sequence.
+
+This exact timing group reduced the measured moving horizontal-band
+amplitude on the Pcam 5C target from about 4.1 luma to below 0.1 luma
+while retaining 1280x720 at 30 frames/s.
+
+Reference: Digilent linux-digilent commit
+1496c680c6df2e3911feed13aa9663a851bf30e9.
+
+Signed-off-by: OV5640 comparison <noreply@example.invalid>
+---
+ drivers/media/i2c/ov5640.c | 40 ++++++++++++++++++++++++++++++++++------
+ 1 file changed, 34 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/media/i2c/ov5640.c b/drivers/media/i2c/ov5640.c
+index 62a4fc7111c8..7d0131830c74 100644
+--- a/drivers/media/i2c/ov5640.c
++++ b/drivers/media/i2c/ov5640.c
+@@ -145,6 +145,8 @@ enum ov5640_pixel_rate_id {
+ 	OV5640_PIXEL_RATE_148M,
+ 	OV5640_PIXEL_RATE_124M,
+ 	OV5640_PIXEL_RATE_96M,
++	OV5640_PIXEL_RATE_84M,
+ 	OV5640_PIXEL_RATE_48M,
++	OV5640_PIXEL_RATE_42M,
+ 	OV5640_NUM_PIXEL_RATES,
+ };
+@@ -160,6 +162,8 @@ static const u32 ov5640_pixel_rates[] = {
+ 	[OV5640_PIXEL_RATE_148M] = 148000000,
+ 	[OV5640_PIXEL_RATE_124M] = 124000000,
+ 	[OV5640_PIXEL_RATE_96M] = 96000000,
++	[OV5640_PIXEL_RATE_84M] = 84000000,
+ 	[OV5640_PIXEL_RATE_48M] = 48000000,
++	[OV5640_PIXEL_RATE_42M] = 42000000,
+ };
+ 
+@@ -175,7 +177,7 @@ static const s64 ov5640_csi2_link_freqs[] = {
+ 	992000000, 888000000, 768000000, 744000000, 672000000, 672000000,
+ 	592000000, 592000000, 576000000, 576000000, 496000000, 496000000,
+ 	384000000, 384000000, 384000000, 336000000, 296000000, 288000000,
+-	248000000, 192000000, 192000000, 192000000, 96000000,
++	248000000, 192000000, 192000000, 192000000, 168000000, 96000000,
+ };
+ 
+ /* Link freq for default mode: UYVY 16 bpp, 2 data lanes. */
+@@ -483,6 +485,17 @@ static inline bool ov5640_is_csi2(const struct ov5640_dev *sensor)
+ 	return sensor->ep.bus_type == V4L2_MBUS_CSI2_DPHY;
+ }
+ 
++static inline bool
++ov5640_is_digilent_720p_yuv(const struct ov5640_dev *sensor)
++{
++	if (!ov5640_is_csi2(sensor) ||
++	    sensor->current_mode->id != OV5640_MODE_720P_1280_720)
++		return false;
++
++	return sensor->fmt.code == MEDIA_BUS_FMT_UYVY8_1X16 ||
++	       sensor->fmt.code == MEDIA_BUS_FMT_YUYV8_1X16;
++}
++
+ static inline const struct ov5640_pixfmt *
+ ov5640_formats(struct ov5640_dev *sensor)
+ {
+@@ -1141,6 +1155,9 @@ static const struct ov5640_timings *
+ ov5640_timings(const struct ov5640_dev *sensor,
+ 	       const struct ov5640_mode_info *mode)
+ {
++	if (ov5640_is_digilent_720p_yuv(sensor))
++		return &mode->dvp_timings;
++
+ 	if (ov5640_is_csi2(sensor))
+ 		return &mode->csi2_timings;
+ 
+@@ -1471,7 +1488,8 @@ static int ov5640_set_mipi_pclk(struct ov5640_dev *sensor)
+ 	 * Higher link frequencies would make sysclk > 1GHz.
+ 	 * Keep the sysclk low and do not divide in the MIPI domain.
+ 	 */
+-	if (link_freq > OV5640_LINK_RATE_MAX)
++	if (ov5640_is_digilent_720p_yuv(sensor) ||
++	    link_freq > OV5640_LINK_RATE_MAX)
+ 		mipi_div = 1;
+ 	else
+ 		mipi_div = 2;
+@@ -1518,7 +1536,10 @@ static int ov5640_set_mipi_pclk(struct ov5640_dev *sensor)
+ 	 */
+ 	num_lanes = sensor->ep.bus.mipi_csi2.num_data_lanes;
+ 	sample_rate = (link_freq * mipi_div * num_lanes * 2) / 16;
+-	pclk_period = 2000000000UL / sample_rate;
++	if (ov5640_is_digilent_720p_yuv(sensor))
++		pclk_period = DIV_ROUND_CLOSEST(2000000000UL, sample_rate);
++	else
++		pclk_period = 2000000000UL / sample_rate;
+ 
+ 	/* Program the clock tree registers. */
+ 	ret = ov5640_mod_reg(sensor, OV5640_REG_SC_PLL_CTRL0, 0x0f, bit_div);
+@@ -2854,8 +2875,10 @@ static void __v4l2_ctrl_vblank_update(struct ov5640_dev *sensor, u32 vblank)
+ {
+ 	const struct ov5640_mode_info *mode = sensor->current_mode;
++	u32 min_vblank = ov5640_is_digilent_720p_yuv(sensor) ?
++			 OV5640_MIN_VBLANK - 4 : OV5640_MIN_VBLANK;
+ 
+-	__v4l2_ctrl_modify_range(sensor->ctrls.vblank, OV5640_MIN_VBLANK,
+-				 OV5640_MAX_VTS - mode->height, 1, vblank);
++	__v4l2_ctrl_modify_range(sensor->ctrls.vblank, min_vblank,
++				 OV5640_MAX_VTS - mode->height, 1, vblank);
+ 
+ 	__v4l2_ctrl_s_ctrl(sensor->ctrls.vblank, vblank);
+ }
+@@ -2864,6 +2888,7 @@ static int ov5640_update_pixel_rate(struct ov5640_dev *sensor)
+ {
+ 	const struct ov5640_mode_info *mode = sensor->current_mode;
+ 	enum ov5640_pixel_rate_id pixel_rate_id = mode->pixel_rate;
++	bool old_720p_yuv = ov5640_is_digilent_720p_yuv(sensor);
+ 	struct v4l2_mbus_framefmt *fmt = &sensor->fmt;
+ 	const struct ov5640_timings *timings = ov5640_timings(sensor, mode);
+ 	s32 exposure_val, exposure_max;
+@@ -2896,6 +2921,9 @@ static int ov5640_update_pixel_rate(struct ov5640_dev *sensor)
+ 	 * Start from the suggested pixel_rate for the current mode and
+ 	 * progressively slow it down if it exceeds 1GHz.
+ 	 */
++	if (old_720p_yuv)
++		pixel_rate_id = OV5640_PIXEL_RATE_84M;
++
+ 	num_lanes = sensor->ep.bus.mipi_csi2.num_data_lanes;
+ 	bpp = ov5640_code_to_bpp(sensor, fmt->code);
+ 	do {
+@@ -2914,7 +2942,7 @@ static int ov5640_update_pixel_rate(struct ov5640_dev *sensor)
+ 	 * Adjust the pixel rate and link frequency control value to report it
+ 	 * correctly to userspace.
+ 	 */
+-	if (link_freq > OV5640_LINK_RATE_MAX) {
++	if (old_720p_yuv || link_freq > OV5640_LINK_RATE_MAX) {
+ 		pixel_rate /= 2;
+ 		link_freq /= 2;
+ 	}
+-- 
+2.47.1

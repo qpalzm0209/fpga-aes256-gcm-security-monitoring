@@ -1,0 +1,35 @@
+From 9f2a56ccae73474dc8604d6958b0b9a89f1c816d Mon Sep 17 00:00:00 2001
+From: PCam 5C Port <pcam@example.invalid>
+Date: Fri, 31 Jul 2026 16:20:00 +0900
+Subject: [PATCH] media-ctl: add Xilinx RBG101010 media-bus code
+
+linux-xlnx exposes the Xilinx Video Demosaic 10-bit RGB output as the
+vendor media-bus code 0x1100, named RBG101010_1X30.  This code predates
+the upstream RGB101010_1X30 definition and deliberately has the Xilinx
+RBG spelling, just like RBG888_1X24.
+
+Without the mapping media-ctl rejects the name before issuing
+VIDIOC_SUBDEV_S_FMT, so the RAW10 -> Demosaic -> CSC graph cannot be
+configured from userspace.
+
+Upstream-Status: Inappropriate [Xilinx vendor media-bus ABI]
+Signed-off-by: PCam 5C Port <pcam@example.invalid>
+---
+ utils/media-ctl/libv4l2subdev.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/utils/media-ctl/libv4l2subdev.c b/utils/media-ctl/libv4l2subdev.c
+index c7aa975..536be78 100644
+--- a/utils/media-ctl/libv4l2subdev.c
++++ b/utils/media-ctl/libv4l2subdev.c
+@@ -1085,6 +1085,7 @@ static const struct {
+ 	enum v4l2_mbus_pixelcode code;
+ } mbus_formats[] = {
+ #include "media-bus-format-names.h"
++	{ "RBG101010_1X30", (enum v4l2_mbus_pixelcode)0x1100 },
+ 	{ "FIXED", MEDIA_BUS_FMT_FIXED },
+ 	{ "Y8", MEDIA_BUS_FMT_Y8_1X8 },
+ 	{ "Y10", MEDIA_BUS_FMT_Y10_1X10 },
+-- 
+2.43.0
+

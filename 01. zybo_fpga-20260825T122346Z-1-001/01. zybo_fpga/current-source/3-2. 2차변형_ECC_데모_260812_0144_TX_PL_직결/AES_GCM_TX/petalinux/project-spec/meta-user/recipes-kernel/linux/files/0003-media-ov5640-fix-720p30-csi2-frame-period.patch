@@ -1,0 +1,36 @@
+From 3a1f84d39357fa254f98d76f40c3278501e4956f Mon Sep 17 00:00:00 2001
+From: Zybo Pcam 5C port <noreply@local>
+Date: Fri, 31 Jul 2026 23:20:00 +0900
+Subject: [PATCH] media: ov5640: fix CSI-2 720p frame period at 30 fps
+
+The CSI-2 720p mode uses a 62 MHz pixel rate, HTS 1600 and VTS 1280.
+That produces 30.2734 fps even though the mode advertises 30 fps.  It
+also shortens the automatic 60 Hz banding exposure range by one step.
+
+Use VTS 1292 (720 active lines plus 572 lines of vertical blanking).
+This produces 29.9923 fps and lets the banding filter use four complete
+60 Hz exposure steps.
+
+Changing the mode default is intentional.  Applying VBLANK before the
+stream starts is ineffective because the mode programming sequence
+writes the default VTS after the controls have been restored.
+
+Signed-off-by: Zybo Pcam 5C port <noreply@local>
+---
+ drivers/media/i2c/ov5640.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/media/i2c/ov5640.c b/drivers/media/i2c/ov5640.c
+index 111111111111..222222222222 100644
+--- a/drivers/media/i2c/ov5640.c
++++ b/drivers/media/i2c/ov5640.c
+@@ -1040,6 +1040,6 @@ static const struct ov5640_mode_info ov5640_mode_data[OV5640_NUM_MODES] = {
+ 			},
+ 			.htot		= 1600,
+-			.vblank_def	= 560,
++			.vblank_def	= 572,
+ 		},
+ 		.reg_data	= ov5640_setting_720P_1280_720,
+ 		.reg_data_size	= ARRAY_SIZE(ov5640_setting_720P_1280_720),
+-- 
+2.43.0

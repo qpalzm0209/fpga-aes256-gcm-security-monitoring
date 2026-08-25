@@ -1,0 +1,115 @@
+# Codex/local workspace
+.codex_tmp/
+
+# Archives and disk images
+*.7z
+*.zip
+*.tar
+*.tar.gz
+*.img
+*.iso
+
+# Secrets and machine-local configuration
+*.env
+*.env.*
+!*.env.example
+!*.env.example.cmd
+pc_rx_ui.env.cmd
+wpa.conf
+**/keys/*private*.pem
+**/*-private.pem
+*.key
+credentials.json
+secrets.*
+
+# AI models and local runtimes
+*.gguf
+*.safetensors
+**/models/
+**/runtime/
+
+# Historical experiments and vendored repositories
+02. 젯슨/02. 젯슨/00. 초기 통합 및 AI 실험 계보/
+**/third_party/
+
+# Duplicates bundled inside the FPGA release archive
+**/current-source/**/Jetson_Dashboard/
+**/current-source/**/PC_RX_UI/
+**/current-source/**/STM32_NUCLEO_F411/
+
+# FPGA build products
+*.bit
+*.bin
+*.elf
+*.xsa
+*.ub
+*.dtb
+*.o
+*.d
+*.jou
+*.pb
+*.wdb
+*.xdbg
+*.sdb
+*.rlx
+*.rpt
+*.pid
+*.log
+*.log*
+*.backup.log
+*.backup.jou
+*.bak
+*.before-*
+*.old
+*.orig
+*.tmp
+BOOT.BIN
+boot.scr
+system.bit
+image.ub
+.Xil/
+**/.Xil/
+**/*.cache/
+**/*.gen/
+**/*.hw/
+**/*.ip_user_files/
+**/*.runs/
+**/xsim.dir/
+**/xsim_work/
+**/vivado/sim/*_work/
+**/NA/
+**/petalinux/build/
+**/petalinux/components/
+**/petalinux/images/
+**/petalinux/.petalinux/
+**/sd_card/
+**/sd_card_backup*/
+**/JTAG_RAM_BOOT/
+**/vivado/artifacts/
+
+# Compiled/native executables stored beside source
+**/tamper/tamperctl
+**/tamper/tamper_kern.o
+**/replay/replay_engine
+**/bruteforce/weakkey_search
+**/operator/dashboard-launcher
+*.exe
+
+# Python / Node / test output
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+coverage/
+.pytest_cache/
+test-results/
+live_metrics.json
+last_error.txt
+
+# OS/editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/

@@ -1,0 +1,36 @@
+From 6b7eaac4962db9080a883a71b1ec45ae7762f753 Mon Sep 17 00:00:00 2001
+From: Zybo PCam port <noreply@local>
+Date: Thu, 30 Jul 2026 19:30:00 +0900
+Subject: [PATCH] media: xilinx: vipp: use packed YUYV with generic VDMA
+
+The generic AXI VDMA driver only accepts interleaved templates with one
+frame chunk.  The Xilinx video DMA fallback currently maps
+MEDIA_BUS_FMT_UYVY8_1X16 to NV16, whose two planes make frame_size equal
+two and cause xilinx_vdma_dma_prep_interleaved() to reject every buffer.
+
+The CSI RX stream is laid out as packed YUYV in memory.  Use that
+one-plane format for this media-bus code when the DMA engine does not
+provide its own V4L2 format list.
+
+---
+ drivers/media/platform/xilinx/xilinx-dma.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/media/platform/xilinx/xilinx-dma.c b/drivers/media/platform/xilinx/xilinx-dma.c
+index 000000000000..222222222222 100644
+--- a/drivers/media/platform/xilinx/xilinx-dma.c
++++ b/drivers/media/platform/xilinx/xilinx-dma.c
+@@ -772,6 +772,11 @@ xvip_dma_enum_format(struct file *file, void *fh, struct v4l2_fmtdesc *f)
+ 	if (f->index > 0)
+ 		return -EINVAL;
+ 
++	if (v4l_fmt.format.code == MEDIA_BUS_FMT_UYVY8_1X16) {
++		f->pixelformat = V4L2_PIX_FMT_YUYV;
++		return 0;
++	}
++
+ 	fmt = xvip_get_format_by_code(v4l_fmt.format.code);
+ 	if (IS_ERR(fmt))
+ 		return PTR_ERR(fmt);
+-- 
+2.43.0

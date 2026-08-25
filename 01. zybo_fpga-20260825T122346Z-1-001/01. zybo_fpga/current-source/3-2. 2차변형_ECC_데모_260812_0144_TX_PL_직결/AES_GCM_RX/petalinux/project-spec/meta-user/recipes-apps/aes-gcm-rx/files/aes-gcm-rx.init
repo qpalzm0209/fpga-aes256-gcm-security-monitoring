@@ -1,0 +1,124 @@
+#!/bin/sh
+
+DAEMON=/usr/bin/aes-gcm-rx
+PIDFILE=/var/run/aes-gcm-rx.pid
+LOGFILE=/var/log/aes-gcm-rx.log
+TX_ADDRESS=${PCAM_TX_ADDRESS:-auto}
+PORT=5602
+ADDRESS=${PCAM_RX_ADDRESS_CIDR:-10.10.15.3/24}
+MAC=${PCAM_RX_MAC:-02:00:00:00:00:03}
+# RX security/error telemetry leaves the board only through the PS UART after
+# an authenticated session is active.  The USB Wi-Fi adapter remains reserved
+# for TX/RX key exchange and never carries PC telemetry.
+PC_TELEMETRY_UART=${PC_TELEMETRY_UART:-/dev/ttyPS0}
+PC_TELEMETRY_UART_BAUD=${PC_TELEMETRY_UART_BAUD:-115200}
+PCAM_TX_PEER_FILE=${PCAM_TX_PEER_FILE:-/run/aes-gcm-tx-peer}
+
+find_interface() {
+    for path in /sys/class/net/*; do
+        interface="${path##*/}"
+        case "$interface" in lo|wl*) continue ;; esac
+        [ -e "$path/device" ] || continue
+        [ -d "$path/wireless" ] && continue
+        echo "$interface"
+        return 0
+    done
+    return 1
+}
+
+configure_network() {
+    interface="$(find_interface)" || return 1
+    ip link set "$interface" down || return 1
+    ip link set "$interface" address "$MAC" || return 1
+    ip addr flush dev "$interface"
+    ip addr add "$ADDRESS" dev "$interface" || return 1
+    ip link set "$interface" up || return 1
+    echo 67108864 >/proc/sys/net/core/rmem_max
+    echo 67108864 >/proc/sys/net/core/rmem_default
+    echo 5000 >/proc/sys/net/core/netdev_max_backlog
+}
+
+load_bridge() {
+    [ -c /dev/pcam_aes_bridge ] && return 0
+    modprobe pcam_aes_bridge 2>/dev/null || \
+        insmod /lib/modules/pcam_aes_bridge.ko
+}
+
+wait_for_runtime() {
+    count=0
+    while [ "$count" -lt 30 ]; do
+        [ -c /dev/pcam_aes_bridge ] && [ -d /dev/dma_heap ] && return 0
+        count=$((count + 1))
+        sleep 1
+    done
+    return 1
+}
+
+launch_daemon() {
+    until configure_network; do
+        echo "Wired network is not ready; retrying"
+        sleep 2
+    done
+
+    until load_bridge && wait_for_runtime; do
+        echo "AES DMA runtime is not ready; retrying"
+        sleep 2
+    done
+
+    # The receiver performs peer discovery continuously, so it is safe to
+    # start before TX.  Keep the launcher PID by replacing it with the daemon.
+    # Do not blindly restart after a fatal DMA timeout: a process killed in the
+    # middle of a PL frame can leave the custom stream engine between frame
+    # boundaries, which requires a board/PL reset rather than a retry loop.
+    exec env \
+        PCAM_RX_RCVBUF_MB=8 \
+        PCAM_RX_DIRECT=1 \
+        PCAM_RX_GRO=1 \
+        PCAM_RX_CMA_DIRECT=1 \
+        PC_TELEMETRY_UART="$PC_TELEMETRY_UART" \
+        PC_TELEMETRY_UART_BAUD="$PC_TELEMETRY_UART_BAUD" \
+        PCAM_TX_PEER_FILE="$PCAM_TX_PEER_FILE" \
+        "$DAEMON" "$TX_ADDRESS" "$PORT"
+}
+
+stop_daemon() {
+    [ -r "$PIDFILE" ] || return 0
+    pid="$(cat "$PIDFILE")"
+    if kill -0 "$pid" 2>/dev/null; then
+        kill "$pid" 2>/dev/null || true
+        count=0
+        while kill -0 "$pid" 2>/dev/null && [ "$count" -lt 50 ]; do
+            count=$((count + 1))
+            sleep 0.1
+        done
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+    rm -f "$PIDFILE"
+}
+
+case "$1" in
+start)
+    [ -r "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null && exit 0
+    mkdir -p /var/run /var/log
+    rm -f "$PIDFILE"
+    "$0" launch >>"$LOGFILE" 2>&1 </dev/null &
+    echo $! >"$PIDFILE"
+    ;;
+launch)
+    launch_daemon
+    ;;
+stop)
+    stop_daemon
+    ;;
+restart)
+    "$0" stop
+    "$0" start
+    ;;
+status)
+    [ -r "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+    ;;
+*)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

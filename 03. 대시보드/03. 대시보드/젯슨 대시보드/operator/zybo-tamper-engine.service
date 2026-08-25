@@ -1,0 +1,18 @@
+[Unit]
+Description=Zybo inline Tamper XDP engine (prepared, attack off)
+Wants=NetworkManager.service
+After=NetworkManager.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/home/jetson/projects/zybo-security-demo/tamper/ensure-tamper-ready.sh
+ExecStop=/home/jetson/projects/zybo-security-demo/tamper/rollback_tamper.sh
+RemainAfterExit=yes
+TimeoutStartSec=0
+TimeoutStopSec=20
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

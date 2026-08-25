@@ -1,0 +1,92 @@
+From 7a7dc98a8ad087c58d619ec08d9877b9b8c0a005 Mon Sep 17 00:00:00 2001
+From: Pcam 5C bring-up <pcam@example.invalid>
+Date: Sat, 1 Aug 2026 12:00:00 +0900
+Subject: [PATCH] media: ov5640: restore Digilent Pcam MIPI stream sequence
+
+The OV5640 sequence used by Digilent's validated Pcam 5C Linux design
+switches the two MIPI lanes, the clock-lane gate and the sleeping-pad
+configuration together when streaming starts and stops.  The current
+upstream driver instead uses non-continuous clock mode and retains its
+LP11 sleep/idle configuration across stream transitions.
+
+Restore the old stream transitions while retaining the current clock-tree
+calculation and the 496-Mbit/s/lane 720p timing.  Also make the 720p JPEG
+mode-select value explicit, as it was in the Digilent 720p table.  This is
+kept as a standalone Pcam A/B patch until the live-image result has been
+validated on hardware.  It deliberately reverses part of upstream commit
+cea2321e6ca9 ("media: ov5640: Re-work MIPI startup sequence"), so it must
+not be enabled as a generic OV5640 fix.
+
+Reference: Digilent linux-digilent commit
+1496c680c6df2e3911feed13aa9663a851bf30e9.
+
+Signed-off-by: Pcam 5C bring-up <pcam@example.invalid>
+---
+ drivers/media/i2c/ov5640.c | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/drivers/media/i2c/ov5640.c b/drivers/media/i2c/ov5640.c
+index 4c7c58c81a0f..89c73fa4655f 100644
+--- a/drivers/media/i2c/ov5640.c
++++ b/drivers/media/i2c/ov5640.c
+@@ -108,6 +108,7 @@
+ #define OV5640_REG_CCIR656_CTRL00	0x4730
+ #define OV5640_REG_POLARITY_CTRL00	0x4740
+ #define OV5640_REG_MIPI_CTRL00		0x4800
++#define OV5640_REG_MIPI_CTRL05		0x4805
+ #define OV5640_REG_DEBUG_MODE		0x4814
+ #define OV5640_REG_PCLK_PERIOD		0x4837
+ #define OV5640_REG_ISP_FORMAT_MUX_CTRL	0x501f
+@@ -686,6 +687,7 @@ static const struct reg_value ov5640_setting_720P_1280_720[] = {
+ 	{0x3a0a, 0x01, 0, 0}, {0x3a0b, 0x72, 0, 0}, {0x3a0e, 0x01, 0, 0},
+ 	{0x3a0d, 0x02, 0, 0}, {0x3a14, 0x02, 0, 0}, {0x3a15, 0xe4, 0, 0},
+ 	{0x4001, 0x02, 0, 0}, {0x4004, 0x02, 0, 0},
++	{OV5640_REG_JPG_MODE_SELECT, 0x02, 0, 0},
+ 	{0x4407, 0x04, 0, 0}, {0x460b, 0x37, 0, 0}, {0x460c, 0x20, 0, 0},
+ 	{0x3824, 0x04, 0, 0}, {0x5001, 0x83, 0, 0},
+ };
+@@ -1900,6 +1902,27 @@ static int ov5640_set_stream_mipi(struct ov5640_dev *sensor, bool on)
+ 	if (ret)
+ 		return ret;
+ 
++	/*
++	 * Match the stream transition used by Digilent's Pcam 5C driver.
++	 * In the active state both data lanes are enabled, the clock lane is
++	 * free-running and register 0x3019 matches the old active value.
++	 * Restore the old idle values when streaming stops.
++	 */
++	ret = ov5640_mod_reg(sensor, OV5640_REG_MIPI_CTRL05,
++			     BIT(7) | BIT(6), on ? 0 : BIT(7) | BIT(6));
++	if (ret)
++		return ret;
++
++	ret = ov5640_mod_reg(sensor, OV5640_REG_MIPI_CTRL00, BIT(5),
++			     on ? 0 : BIT(5));
++	if (ret)
++		return ret;
++
++	ret = ov5640_write_reg(sensor, OV5640_REG_PAD_OUTPUT00,
++			       on ? 0x00 : 0x70);
++	if (ret)
++		return ret;
++
+ 	return ov5640_write_reg(sensor, OV5640_REG_FRAME_CTRL01,
+ 				on ? 0x00 : 0x0f);
+ }
+@@ -2605,6 +2628,14 @@ static int ov5640_set_power_mipi(struct ov5640_dev *sensor, bool on)
+ 	if (ret)
+ 		return ret;
+ 
++	/*
++	 * Keep both data lanes disabled while the interface is idle.  The
++	 * stream-on sequence above clears these bits to their active value.
++	 */
++	ret = ov5640_write_reg(sensor, OV5640_REG_MIPI_CTRL05, 0xd0);
++	if (ret)
++		return ret;
++
+ 	/*
+ 	 * Set data lanes and clock in LP11 when 'sleeping'
+ 	 *
+-- 
+2.47.1

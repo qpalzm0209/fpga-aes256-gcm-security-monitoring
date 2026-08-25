@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080b0d" />
+    <title>Jetson Local VLM Test</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <span class="eyebrow">STANDALONE / ON-DEVICE TEST</span>
+          <h1>JETSON LOCAL VLM IMAGE ANALYSIS</h1>
+        </div>
+        <div class="badges">
+          <span id="modelBadge" class="badge waiting">MODEL CHECK</span>
+          <span class="badge local">LOCAL / JETSON</span>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <article class="panel image-panel">
+          <header>
+            <div>
+              <span>RECOVERED FRAME</span>
+              <strong id="fileName">NO IMAGE SELECTED</strong>
+            </div>
+            <label class="file-button">
+              SELECT IMAGE
+              <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp" />
+            </label>
+          </header>
+          <div id="imageStage" class="image-stage empty">
+            <img id="preview" alt="Selected recovered frame preview" />
+            <p id="imageMessage">SELECT A JPEG, PNG, OR WEBP IMAGE</p>
+          </div>
+          <button id="analyzeButton" class="analyze" disabled>ANALYZE WITH LOCAL VLM</button>
+        </article>
+
+        <article class="panel result-panel">
+          <header>
+            <div>
+              <span>ON-DEVICE VLM ANALYSIS</span>
+              <strong id="resultState">WAITING FOR USER</strong>
+            </div>
+          </header>
+          <div id="progress" class="progress hidden">
+            <i></i>
+            <strong>ANALYZING ON JETSON...</strong>
+            <span>One local inference request is running.</span>
+          </div>
+          <div id="errorBox" class="error hidden"></div>
+          <dl id="analysis" class="analysis">
+            <div><dt>Scene</dt><dd id="scene">—</dd></div>
+            <div><dt>People</dt><dd id="people">—</dd></div>
+            <div><dt>Objects</dt><dd id="objects">—</dd></div>
+            <div><dt>Potentially Sensitive Information</dt><dd id="sensitive">—</dd></div>
+          </dl>
+        </article>
+      </section>
+
+      <section class="panel telemetry-panel">
+        <header>
+          <div>
+            <span>MEASURED ON THIS JETSON</span>
+            <strong>INFERENCE TELEMETRY</strong>
+          </div>
+        </header>
+        <div class="metrics">
+          <div><span>Inference Time</span><strong id="inferenceTime">—</strong></div>
+          <div><span>Total Response</span><strong id="totalTime">—</strong></div>
+          <div><span>GPU Mean / Peak</span><strong id="gpuUsage">—</strong></div>
+          <div><span>RAM Before / Peak</span><strong id="ramUsage">—</strong></div>
+          <div><span>Power Mean / Peak</span><strong id="powerUsage">—</strong></div>
+          <div><span>Model</span><strong id="modelName">—</strong></div>
+          <div><span>Execution</span><strong id="execution">LOCAL / JETSON</strong></div>
+          <div><span>Tokens</span><strong id="tokens">—</strong></div>
+        </div>
+        <details>
+          <summary>RAW MODEL OUTPUT / FAILURE LOG</summary>
+          <pre id="rawOutput">No inference has run.</pre>
+        </details>
+      </section>
+
+      <footer>
+        No cloud API · No automatic inference · Not connected to the AES-GCM demo
+      </footer>
+    </main>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

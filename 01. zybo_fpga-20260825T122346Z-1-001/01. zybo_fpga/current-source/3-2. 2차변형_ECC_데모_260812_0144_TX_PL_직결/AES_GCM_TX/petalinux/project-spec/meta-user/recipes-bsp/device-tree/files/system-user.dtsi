@@ -1,0 +1,157 @@
+/include/ "system-conf.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+  usb_phy0: usb-phy@0 {
+    compatible = "ulpi-phy";
+    #phy-cells = <0>;
+    reg = <0xe0002000 0x1000>;
+    view-port = <0x0170>;
+    drv-vbus;
+  };
+
+  pcam_xclk: pcam-xclk {
+    compatible = "fixed-clock";
+    #clock-cells = <0>;
+    clock-frequency = <12000000>;
+  };
+
+  pcam_dovdd: pcam-dovdd {
+    compatible = "regulator-fixed";
+    regulator-name = "pcam-dovdd";
+    regulator-min-microvolt = <1800000>;
+    regulator-max-microvolt = <1800000>;
+  };
+
+  pcam_avdd: pcam-avdd {
+    compatible = "regulator-fixed";
+    regulator-name = "pcam-avdd";
+    regulator-min-microvolt = <2800000>;
+    regulator-max-microvolt = <2800000>;
+  };
+
+  pcam_dvdd: pcam-dvdd {
+    compatible = "regulator-fixed";
+    regulator-name = "pcam-dvdd";
+    regulator-min-microvolt = <1500000>;
+    regulator-max-microvolt = <1500000>;
+  };
+
+  /* V4L2 capture master.  The frame-buffer writer is the DMA endpoint;
+   * describing only a graph port below v_frmbuf_wr does not instantiate
+   * /dev/video0 on Linux 6.12. */
+  vcap_mipi_csi2_rx_subsystem_0: vcap-mipi-csi2-rx-subsystem-0 {
+    compatible = "xlnx,video";
+    dmas = <&v_frmbuf_wr_0 0>;
+    dma-names = "port0";
+
+    ports {
+      #address-cells = <1>;
+      #size-cells = <0>;
+
+      port@0 {
+        reg = <0>;
+        direction = "input";
+        v_frmbuf_wr_0mipi_csi2_rx_subsystem_0: endpoint {
+          remote-endpoint = <&csi_to_capture>;
+        };
+      };
+    };
+  };
+};
+
+&usb0 {
+  status = "okay";
+  dr_mode = "host";
+  usb-phy = <&usb_phy0>;
+};
+
+&axi_iic_pcam {
+  status = "okay";
+  clock-frequency = <100000>;
+
+  ov5640: camera@3c {
+    compatible = "ovti,ov5640";
+    reg = <0x3c>;
+    clocks = <&pcam_xclk>;
+    clock-names = "xclk";
+    DOVDD-supply = <&pcam_dovdd>;
+    AVDD-supply = <&pcam_avdd>;
+    DVDD-supply = <&pcam_dvdd>;
+
+    /* Zybo G20 drives the Pcam 5C PWUP input.  The upstream OV5640
+     * binding names this logical signal powerdown; active-low maps
+     * power-down to physical PWUP-low. */
+    powerdown-gpios = <&axi_gpio_pcam 0 GPIO_ACTIVE_LOW>;
+
+    port {
+      ov5640_to_csi: endpoint {
+        remote-endpoint = <&csi_from_ov5640>;
+        clock-lanes = <0>;
+        data-lanes = <1 2>;
+        /* 2 * 168 MHz DDR = 336 Mb/s on each CSI-2 lane. */
+        link-frequencies = /bits/ 64 <168000000>;
+      };
+    };
+  };
+};
+
+&mipi_csi2_rx_subsystem_0 {
+  status = "okay";
+  xlnx,max-lanes = <2>;
+  xlnx,dphy-present;
+  xlnx,vc = <4>;
+  /* Linux 6.12 Xilinx CSI-2 RX maps datatype 0x1e to
+   * MEDIA_BUS_FMT_UYVY8_1X16. */
+  xlnx,csi-pxl-format = <0x1e>;
+  xlnx,vfb;
+  xlnx,ppc = <1>;
+
+  ports {
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    port@0 {
+      reg = <0>;
+      csi_from_ov5640: endpoint {
+        remote-endpoint = <&ov5640_to_csi>;
+        data-lanes = <1 2>;
+        link-frequencies = /bits/ 64 <168000000>;
+      };
+    };
+
+    port@1 {
+      reg = <1>;
+      csi_to_capture: endpoint {
+        /* DTG collapses the PL-direct normalizer/16-to-128/AES-GCM/
+         * 128-to-16/width-adapter/CDC chain into this capture endpoint. */
+        remote-endpoint = <&v_frmbuf_wr_0mipi_csi2_rx_subsystem_0>;
+      };
+    };
+  };
+};
+
+&axi_gpio_frmbuf_reset {
+  status = "okay";
+  gpio-controller;
+  #gpio-cells = <2>;
+  xlnx,dout-default = <0x00000001>;
+};
+
+&v_frmbuf_wr_0 {
+  compatible = "xlnx,v-frmbuf-wr-v3.0", "xlnx,axi-frmbuf-wr-v2.2";
+  status = "okay";
+  #dma-cells = <1>;
+  clock-names = "ap_clk";
+  reset-gpios = <&axi_gpio_frmbuf_reset 0 GPIO_ACTIVE_LOW>;
+  xlnx,dma-addr-width = <32>;
+  /* Keep one packed, one-plane userspace buffer.  In SW3 encryption mode
+   * this buffer contains ciphertext already produced by PL, never the
+   * camera plaintext that entered the MIPI receiver. */
+  xlnx,vid-formats = "yuyv";
+  xlnx,pixels-per-clock = <1>;
+  xlnx,dma-align = <16>;
+  xlnx,max-height = <720>;
+  xlnx,max-width = <1280>;
+
+};

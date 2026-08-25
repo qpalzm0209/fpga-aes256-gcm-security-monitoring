@@ -1,0 +1,236 @@
+{
+  "scope": "live_record_full_aes256_gcm_tag_benchmark",
+  "generated_at": "2026-08-14T03:01:30.669062+00:00",
+  "nvcc_version": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2024 NVIDIA Corporation\nBuilt on Wed_Aug_14_10:14:07_PDT_2024\nCuda compilation tools, release 12.6, V12.6.68\nBuild cuda_12.6.r12.6/compiler.34714021_0",
+  "record_file": "runtime/bruteforce/live-record.bin",
+  "profiles": {
+    "cpu-multi": {
+      "profile": "cpu-multi",
+      "tested": 131072,
+      "elapsed_s": 4.961124,
+      "keys_per_s": 26419.821,
+      "found_seed": null,
+      "tag_verified": false,
+      "requested_candidates": 131072,
+      "system_metrics": {
+        "samples": 10,
+        "board_power_w": {
+          "mean": 6.8072,
+          "min": 6.12,
+          "max": 7.028
+        },
+        "cpu_temp_c": {
+          "mean": 51.830799999999996,
+          "min": 51.468,
+          "max": 52.031
+        },
+        "cpu_util_percent": {
+          "mean": 56.06666666666666,
+          "min": 21.0,
+          "max": 68.16666666666667
+        },
+        "gpu_temp_c": {
+          "mean": 51.75599999999999,
+          "min": 51.343,
+          "max": 52.0
+        },
+        "gpu_util_percent": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "memory_total_mb": {
+          "mean": 7607.0,
+          "min": 7607.0,
+          "max": 7607.0
+        },
+        "memory_used_mb": {
+          "mean": 6337.4,
+          "min": 6325.0,
+          "max": 6343.0
+        }
+      }
+    },
+    "cuda-low": {
+      "profile": "cuda-low",
+      "tested": 524288,
+      "elapsed_s": 1.060713,
+      "keys_per_s": 494278.989,
+      "found_seed": null,
+      "tag_verified": false,
+      "requested_candidates": 524288,
+      "system_metrics": {
+        "samples": 3,
+        "board_power_w": {
+          "mean": 7.09,
+          "min": 7.028,
+          "max": 7.214
+        },
+        "cpu_temp_c": {
+          "mean": 51.833,
+          "min": 51.625,
+          "max": 51.937
+        },
+        "cpu_util_percent": {
+          "mean": 55.27777777777778,
+          "min": 30.833333333333332,
+          "max": 67.5
+        },
+        "gpu_temp_c": {
+          "mean": 51.791666666666664,
+          "min": 51.625,
+          "max": 52.125
+        },
+        "gpu_util_percent": {
+          "mean": 29.333333333333332,
+          "min": 0.0,
+          "max": 88.0
+        },
+        "memory_total_mb": {
+          "mean": 7607.0,
+          "min": 7607.0,
+          "max": 7607.0
+        },
+        "memory_used_mb": {
+          "mean": 6343.666666666667,
+          "min": 6341.0,
+          "max": 6349.0
+        }
+      }
+    },
+    "cuda-mid": {
+      "profile": "cuda-mid",
+      "tested": 1048576,
+      "elapsed_s": 0.880326,
+      "keys_per_s": 1191122.005,
+      "found_seed": null,
+      "tag_verified": false,
+      "requested_candidates": 1048576,
+      "system_metrics": {
+        "samples": 2,
+        "board_power_w": {
+          "mean": 7.214,
+          "min": 7.214,
+          "max": 7.214
+        },
+        "cpu_temp_c": {
+          "mean": 51.625,
+          "min": 51.625,
+          "max": 51.625
+        },
+        "cpu_util_percent": {
+          "mean": 30.833333333333332,
+          "min": 30.833333333333332,
+          "max": 30.833333333333332
+        },
+        "gpu_temp_c": {
+          "mean": 52.125,
+          "min": 52.125,
+          "max": 52.125
+        },
+        "gpu_util_percent": {
+          "mean": 88.0,
+          "min": 88.0,
+          "max": 88.0
+        },
+        "memory_total_mb": {
+          "mean": 7607.0,
+          "min": 7607.0,
+          "max": 7607.0
+        },
+        "memory_used_mb": {
+          "mean": 6349.0,
+          "min": 6349.0,
+          "max": 6349.0
+        }
+      }
+    },
+    "cuda-max": {
+      "profile": "cuda-max",
+      "tested": 2097152,
+      "elapsed_s": 1.138289,
+      "keys_per_s": 1842371.409,
+      "found_seed": null,
+      "tag_verified": false,
+      "requested_candidates": 2097152,
+      "system_metrics": {
+        "samples": 3,
+        "board_power_w": {
+          "mean": 9.007666666666667,
+          "min": 8.58,
+          "max": 9.863
+        },
+        "cpu_temp_c": {
+          "mean": 51.89566666666667,
+          "min": 51.875,
+          "max": 51.937
+        },
+        "cpu_util_percent": {
+          "mean": 18.055555555555557,
+          "min": 16.833333333333332,
+          "max": 18.666666666666668
+        },
+        "gpu_temp_c": {
+          "mean": 53.187333333333335,
+          "min": 53.0,
+          "max": 53.562
+        },
+        "gpu_util_percent": {
+          "mean": 93.66666666666667,
+          "min": 91.0,
+          "max": 99.0
+        },
+        "memory_total_mb": {
+          "mean": 7607.0,
+          "min": 7607.0,
+          "max": 7607.0
+        },
+        "memory_used_mb": {
+          "mean": 6348.333333333333,
+          "min": 6347.0,
+          "max": 6351.0
+        }
+      }
+    }
+  },
+  "full_scan_estimates_cuda_max": {
+    "20": {
+      "key_space": 1048576,
+      "full_scan_s": 0.5691447418678435,
+      "expected_half_scan_s": 0.28457237093392174
+    },
+    "21": {
+      "key_space": 2097152,
+      "full_scan_s": 1.138289483735687,
+      "expected_half_scan_s": 0.5691447418678435
+    },
+    "22": {
+      "key_space": 4194304,
+      "full_scan_s": 2.276578967471374,
+      "expected_half_scan_s": 1.138289483735687
+    },
+    "23": {
+      "key_space": 8388608,
+      "full_scan_s": 4.553157934942748,
+      "expected_half_scan_s": 2.276578967471374
+    },
+    "24": {
+      "key_space": 16777216,
+      "full_scan_s": 9.106315869885496,
+      "expected_half_scan_s": 4.553157934942748
+    },
+    "25": {
+      "key_space": 33554432,
+      "full_scan_s": 18.21263173977099,
+      "expected_half_scan_s": 9.106315869885496
+    },
+    "26": {
+      "key_space": 67108864,
+      "full_scan_s": 36.42526347954198,
+      "expected_half_scan_s": 18.21263173977099
+    }
+  },
+  "recommended_demo_bits": 26,
+  "recommendation_rule": "largest N with measured full scan between 10 and 90 seconds",
+  "secret_key_included": false
+}

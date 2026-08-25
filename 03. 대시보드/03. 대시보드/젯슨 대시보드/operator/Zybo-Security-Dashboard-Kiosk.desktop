@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Zybo Security Dashboard Kiosk
+Comment=Open the Zybo dashboard in locked Firefox kiosk mode
+Exec=/usr/bin/env bash /home/jetson/projects/zybo-security-demo/runtime/start-dashboard-page01-local.sh
+Icon=utilities-system-monitor
+Terminal=false
+Categories=Development;
+StartupNotify=false

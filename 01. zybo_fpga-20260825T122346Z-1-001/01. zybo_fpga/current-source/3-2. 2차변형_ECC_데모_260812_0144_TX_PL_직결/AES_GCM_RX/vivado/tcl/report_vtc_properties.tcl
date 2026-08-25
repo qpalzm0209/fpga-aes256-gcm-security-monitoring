@@ -1,0 +1,6 @@
+set script_dir [file dirname [file normalize [info script]]]
+set vivado_dir [file normalize [file join $script_dir ..]]
+open_project [file join $vivado_dir project AES_GCM_RX.xpr]
+open_bd_design [get_files aes_gcm_rx_system.bd]
+report_property [get_bd_cells video_timing_controller]
+report_property [get_bd_cells axi4s_to_video]

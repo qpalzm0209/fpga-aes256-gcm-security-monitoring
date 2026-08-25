@@ -1,0 +1,61 @@
+#!/bin/sh
+set -u
+
+BASE=0x43d00000
+role="${1:-}"
+if [ -z "$role" ]; then
+    case "$(hostname 2>/dev/null || true)" in
+        *RX*|*rx*) role=rx ;;
+        *TX*|*tx*) role=tx ;;
+        *)
+            [ -e /etc/aes-session/rx-private.pem ] && role=rx || role=tx
+            ;;
+    esac
+fi
+case "$role" in tx|rx) ;; *) echo "Usage: $0 [tx|rx]" >&2; exit 2 ;; esac
+
+echo "role=$role"
+if [ -r /var/run/aes-session-wifi.interface ]; then
+    interface="$(cat /var/run/aes-session-wifi.interface)"
+    echo "wifi_interface=$interface"
+    wpa_cli -i "$interface" status 2>/dev/null |
+        grep -E '^(ssid|bssid|address|wpa_state|ip_address)=' || true
+else
+    echo "wifi_interface=not-ready"
+fi
+
+if command -v devmem >/dev/null 2>&1; then
+    ident="$(devmem "$BASE" 32 2>/dev/null || true)"
+    status="$(devmem 0x43d00008 32 2>/dev/null || true)"
+    session="$(devmem 0x43d00030 32 2>/dev/null || true)"
+    request_count="$(devmem 0x43d00034 32 2>/dev/null || true)"
+    termination_count="$(devmem 0x43d0003c 32 2>/dev/null || true)"
+    if [ -n "$status" ]; then
+        raw=$((status))
+        printf 'register_id=%s active_session=%s request_count=%s termination_count=%s\n' \
+            "$ident" "$session" "$request_count" "$termination_count"
+        printf 'key_valid=%u key_ready=%u busy=%u error=%u request=%u switch=%u commit_pending=%u clear_pending=%u terminate_active=%u frame_lock=%u epoch=%u\n' \
+            $((raw & 1)) $(((raw >> 1) & 1)) $(((raw >> 2) & 1)) \
+            $(((raw >> 3) & 1)) $(((raw >> 4) & 1)) $(((raw >> 5) & 1)) \
+            $(((raw >> 6) & 1)) $(((raw >> 7) & 1)) \
+            $(((raw >> 8) & 1)) $(((raw >> 9) & 1)) $((raw >> 16))
+    else
+        echo "session_register=unreadable"
+    fi
+fi
+
+if /etc/init.d/aes-session-agent status >/dev/null 2>&1; then
+    echo "session_agent=running"
+else
+    echo "session_agent=stopped"
+fi
+if [ "$role" = tx ]; then
+    /etc/init.d/pcam-gcm-tx status >/dev/null 2>&1 &&
+        echo "video_service=running" || echo "video_service=stopped"
+    log=/var/log/aes-session-agent-tx.log
+else
+    /etc/init.d/aes-gcm-rx status >/dev/null 2>&1 &&
+        echo "video_service=running" || echo "video_service=stopped"
+    log=/var/log/aes-session-agent-rx.log
+fi
+[ -r "$log" ] && tail -n 8 "$log"

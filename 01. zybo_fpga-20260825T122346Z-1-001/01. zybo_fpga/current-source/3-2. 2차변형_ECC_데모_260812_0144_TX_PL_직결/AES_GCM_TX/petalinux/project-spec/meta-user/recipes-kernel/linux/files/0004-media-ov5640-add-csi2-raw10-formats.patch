@@ -1,0 +1,245 @@
+From 80a1fe46505dd5026c47941828a777e055874b51 Mon Sep 17 00:00:00 2001
+From: Zybo Pcam 5C port <noreply@local>
+Date: Fri, 31 Jul 2026 23:55:00 +0900
+Subject: [PATCH] media: ov5640: add CSI-2 RAW10 Bayer formats
+
+The OV5640 supports 10-bit Bayer output over CSI-2, but the driver only
+advertises the 8-bit Bayer variants and always programs the CSI sample
+width for 8-bit operation.  This prevents a RAW10-capable receiver from
+negotiating the format with the sensor.
+
+Advertise the four Bayer orders as MEDIA_BUS_FMT_*10_1X10, select the
+10-bit MIPI sample width for those formats, and add the RAW10 link rates
+that can be produced by the existing mode/pixel-rate table.  The 720p
+mode starts from the driver's existing CSI-2 720p timing.
+
+RAW10 does not take the YUV422 clock-halving path.  The nominal 620
+Mb/s/lane request is quantized by the OV5640 integer PLL to 624 Mb/s/lane,
+which gives a 62.4 MHz timing clock.  Use a RAW10-only VTS of 1300, or 580
+lines of vertical blanking, so 1600 HTS produces exactly 30 fps.  Keep the
+YUV default at VTS 1292.
+
+For 720p RAW10, also apply the analog-control value from Digilent's
+validated Pcam 5C sequence.  Restore the generic value when switching
+the active 720p mode back to another format so that YUV behavior is not
+changed by a previous RAW10 stream.
+
+The generic MIPI timing calculation programs 0x4837 to 0x0c for this
+RAW10 mode.  On the Pcam 5C that value causes continuous SoT sync and
+frame-sync errors.  A live sweep showed an error-free plateau from 0x18
+through 0x28, so use the centered 0x20 value only for 720p RAW10 and
+leave every previously supported format on the upstream calculation.
+
+This patch only enables sensor-side format negotiation.  The CSI-2 RX
+and downstream video DMA hardware must also be synthesized for RAW10.
+
+Signed-off-by: Zybo Pcam 5C port <noreply@local>
+---
+ drivers/media/i2c/ov5640.c | 89 ++++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 81 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/media/i2c/ov5640.c b/drivers/media/i2c/ov5640.c
+index 222222222222..333333333333 100644
+--- a/drivers/media/i2c/ov5640.c
++++ b/drivers/media/i2c/ov5640.c
+@@ -68,6 +68,7 @@
+ #define OV5640_REG_AWB_G_GAIN		0x3402
+ #define OV5640_REG_AWB_B_GAIN		0x3404
+ #define OV5640_REG_AWB_MANUAL_CTRL	0x3406
++#define OV5640_REG_ANALOG_CTRL12		0x3612
+ #define OV5640_REG_AEC_PK_EXPOSURE_HI	0x3500
+ #define OV5640_REG_AEC_PK_EXPOSURE_MED	0x3501
+ #define OV5640_REG_AEC_PK_EXPOSURE_LO	0x3502
+@@ -167,9 +168,11 @@ static const u32 ov5640_pixel_rates[] = {
+  * MIPI CSI-2 link frequencies.
+  *
+- * Derived from the above defined pixel rate for bpp = (8, 16, 24) and
++ * Derived from the above defined pixel rate for bpp = (8, 10, 16, 24) and
+  * data_lanes = (1, 2)
+  *
+  * link_freq = (pixel_rate * bpp) / (2 * data_lanes)
++ *
++ * Keep the legacy entries in place because the default is an array index.
+  */
+ static const s64 ov5640_csi2_link_freqs[] = {
+ 	992000000, 888000000, 768000000, 744000000, 672000000, 672000000,
+@@ -176,6 +179,7 @@ static const s64 ov5640_csi2_link_freqs[] = {
+ 	592000000, 592000000, 576000000, 576000000, 496000000, 496000000,
+ 	384000000, 384000000, 384000000, 336000000, 296000000, 288000000,
+ 	248000000, 192000000, 192000000, 192000000, 96000000,
++	420000000, 370000000, 310000000, 240000000, 120000000,
+ };
+ 
+ /* Link freq for default mode: UYVY 16 bpp, 2 data lanes. */
+@@ -181,5 +185,13 @@ static const s64 ov5640_csi2_link_freqs[] = {
+ #define OV5640_DEFAULT_LINK_FREQ	13
+ 
++/*
++ * The 720p CSI-2 timing table is shared by all pixel formats.  The nominal
++ * 620 Mb/s/lane RAW10 request quantizes to 624 Mb/s/lane and a 62.4 MHz
++ * timing clock.  HTS 1600 and VTS 1300 therefore produce exactly 30 fps.
++ */
++#define OV5640_720P_RAW10_VBLANK	580
++#define OV5640_720P_RAW10_PCLK_PERIOD	0x20
++
+ enum ov5640_format_mux {
+ 	OV5640_FMT_MUX_YUV422 = 0,
+ 	OV5640_FMT_MUX_RGB,
+@@ -326,6 +330,34 @@ static const struct ov5640_pixfmt ov5640_csi2_formats[] = {
+ 		.bpp		= 8,
+ 		.ctrl00		= 0x03,
+ 		.mux		= OV5640_FMT_MUX_RAW_DPC,
++	}, {
++		/* Raw 10-bit, BGBG... / GRGR... */
++		.code		= MEDIA_BUS_FMT_SBGGR10_1X10,
++		.colorspace	= V4L2_COLORSPACE_RAW,
++		.bpp		= 10,
++		.ctrl00		= 0x00,
++		.mux		= OV5640_FMT_MUX_RAW_DPC,
++	}, {
++		/* Raw 10-bit, GBGB... / RGRG... */
++		.code		= MEDIA_BUS_FMT_SGBRG10_1X10,
++		.colorspace	= V4L2_COLORSPACE_RAW,
++		.bpp		= 10,
++		.ctrl00		= 0x01,
++		.mux		= OV5640_FMT_MUX_RAW_DPC,
++	}, {
++		/* Raw 10-bit, GRGR... / BGBG... */
++		.code		= MEDIA_BUS_FMT_SGRBG10_1X10,
++		.colorspace	= V4L2_COLORSPACE_RAW,
++		.bpp		= 10,
++		.ctrl00		= 0x02,
++		.mux		= OV5640_FMT_MUX_RAW_DPC,
++	}, {
++		/* Raw 10-bit, RGRG... / GBGB... */
++		.code		= MEDIA_BUS_FMT_SRGGB10_1X10,
++		.colorspace	= V4L2_COLORSPACE_RAW,
++		.bpp		= 10,
++		.ctrl00		= 0x03,
++		.mux		= OV5640_FMT_MUX_RAW_DPC,
+ 	},
+ 	{ /* sentinel */ }
+ };
+@@ -1348,10 +1380,12 @@ static unsigned long ov5640_calc_sys_clk(struct ov5640_dev *sensor,
+ #define OV5640_PLL_CTRL3_PLL_ROOT_DIV_2		BIT(4)
+ 
+ /*
+- * We only supports 8-bit formats at the moment
++ * DVP uses the integer bit divider.  CSI-2 encodes its 8/10-bit sample
++ * width directly in the low nibble of SC_PLL_CTRL0.
+  */
+ #define OV5640_BIT_DIV				2
+ #define OV5640_PLL_CTRL0_MIPI_MODE_8BIT		0x08
++#define OV5640_PLL_CTRL0_MIPI_MODE_10BIT	0x0a
+ 
+ /*
+  * This is supposed to be ranging from 1 to 8, but the value is always
+@@ -1494,7 +1528,10 @@ static int ov5640_set_mipi_pclk(struct ov5640_dev *sensor)
+ 	 * - 1 lanes: MIPI_SCLK = (8 or 10) * PCLK
+ 	 */
+ 	root_div = OV5640_PLL_CTRL3_PLL_ROOT_DIV_2;
+-	bit_div =  OV5640_PLL_CTRL0_MIPI_MODE_8BIT;
++	if (ov5640_code_to_bpp(sensor, sensor->fmt.code) == 10)
++		bit_div = OV5640_PLL_CTRL0_MIPI_MODE_10BIT;
++	else
++		bit_div = OV5640_PLL_CTRL0_MIPI_MODE_8BIT;
+ 	pclk_div = ilog2(OV5640_PCLK_ROOT_DIV);
+ 
+ 	/*
+@@ -1519,6 +1563,15 @@ static int ov5640_set_mipi_pclk(struct ov5640_dev *sensor)
+ 	num_lanes = sensor->ep.bus.mipi_csi2.num_data_lanes;
+ 	sample_rate = (link_freq * mipi_div * num_lanes * 2) / 16;
+ 	pclk_period = 2000000000UL / sample_rate;
++	/*
++	 * The upstream calculation was validated for the pre-existing formats,
++	 * but produces 0x0c for this newly added RAW10 mode.  Pcam 5C live
++	 * measurements show that 0x20 keeps SoT and frame synchronization clean.
++	 * Keep the override mode-specific to avoid changing established formats.
++	 */
++	if (sensor->current_mode->id == OV5640_MODE_720P_1280_720 &&
++	    ov5640_code_to_bpp(sensor, sensor->fmt.code) == 10)
++		pclk_period = OV5640_720P_RAW10_PCLK_PERIOD;
+ 
+ 	/* Program the clock tree registers. */
+ 	ret = ov5640_mod_reg(sensor, OV5640_REG_SC_PLL_CTRL0, 0x0f, bit_div);
+@@ -1651,6 +1695,7 @@ static int ov5640_set_timings(struct ov5640_dev *sensor,
+ 	const struct ov5640_timings *timings;
+ 	const struct v4l2_rect *analog_crop;
+ 	const struct v4l2_rect *crop;
++	u32 vblank;
+ 	int ret;
+ 
+ 	if (sensor->fmt.code == MEDIA_BUS_FMT_JPEG_1X8) {
+@@ -1662,6 +1707,10 @@ static int ov5640_set_timings(struct ov5640_dev *sensor,
+ 	timings = ov5640_timings(sensor, mode);
+ 	analog_crop = &timings->analog_crop;
+ 	crop = &timings->crop;
++	vblank = timings->vblank_def;
++	if (mode->id == OV5640_MODE_720P_1280_720 &&
++	    ov5640_code_to_bpp(sensor, sensor->fmt.code) == 10)
++		vblank = OV5640_720P_RAW10_VBLANK;
+ 
+ 	ret = ov5640_write_reg16(sensor, OV5640_REG_TIMING_HS,
+ 				 analog_crop->left);
+@@ -1704,7 +1753,7 @@ static int ov5640_set_timings(struct ov5640_dev *sensor,
+ 		return ret;
+ 
+ 	ret = ov5640_write_reg16(sensor, OV5640_REG_TIMING_VTS,
+-				 mode->height + timings->vblank_def);
++				 mode->height + vblank);
+ 	if (ret < 0)
+ 		return ret;
+ 
+@@ -2828,9 +2865,9 @@ static int ov5640_try_fmt_internal(struct v4l2_subdev *sd,
+ 	/*
+ 	 * Adjust mode according to bpp:
+-	 * - 8bpp modes work for resolution >= 1280x720
++	 * - raw 8/10bpp modes work for resolution >= 1280x720
+ 	 * - 24bpp modes work resolution < 1280x720
+ 	 */
+-	if (bpp == 8 && mode->width < 1280)
++	if ((bpp == 8 || bpp == 10) && mode->width < 1280)
+ 		mode = &ov5640_mode_data[OV5640_MODE_720P_1280_720];
+ 	else if (bpp == 24 && mode->width > 1024)
+ 		mode = &ov5640_mode_data[OV5640_MODE_XGA_1024_768];
+@@ -2933,6 +2982,8 @@ static int ov5640_update_pixel_rate(struct ov5640_dev *sensor)
+ 				 hblank, hblank, 1, hblank);
+ 
+ 	vblank = timings->vblank_def;
++	if (mode->id == OV5640_MODE_720P_1280_720 && bpp == 10)
++		vblank = OV5640_720P_RAW10_VBLANK;
+ 	__v4l2_ctrl_vblank_update(sensor, vblank);
+ 
+ 	exposure_max = timings->crop.height + vblank - 4;
+@@ -3041,6 +3078,18 @@ static int ov5640_set_framefmt(struct ov5640_dev *sensor,
+ 
+ 	pixfmt = ov5640_code_to_pixfmt(sensor, format->code);
+ 
++	/*
++	 * Digilent's validated Pcam 5C RAW10 720p sequence uses 0x59 here.
++	 * The generic mode table programs 0x29, so restore that value when
++	 * switching the running 720p mode back to a non-RAW10 format.
++	 */
++	if (sensor->current_mode->id == OV5640_MODE_720P_1280_720) {
++		ret = ov5640_write_reg(sensor, OV5640_REG_ANALOG_CTRL12,
++				       pixfmt->bpp == 10 ? 0x59 : 0x29);
++		if (ret)
++			return ret;
++	}
++
+ 	/* FORMAT CONTROL00: YUV and RGB formatting */
+ 	ret = ov5640_write_reg(sensor, OV5640_REG_FORMAT_CONTROL00,
+ 			       pixfmt->ctrl00);
+@@ -3560,8 +3609,8 @@ static int ov5640_enum_frame_size(struct v4l2_subdev *sd,
+ 	if (bpp == 24 && index >= OV5640_MODE_720P_1280_720)
+ 		return -EINVAL;
+ 
+-	/* FIXME: Low resolution modes don't work in 8bpp formats. */
+-	if (bpp == 8)
++	/* Low resolution modes don't work in raw 8/10bpp formats. */
++	if (bpp == 8 || bpp == 10)
+ 		index += OV5640_MODE_720P_1280_720;
+ 
+ 	if (index >= OV5640_NUM_MODES)
+-- 
+2.43.0

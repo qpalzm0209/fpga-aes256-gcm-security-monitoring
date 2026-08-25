@@ -1,0 +1,184 @@
+#!/bin/sh
+
+DAEMON=/usr/bin/pcam-gcm-udp-tx
+PIDFILE=/var/run/pcam-gcm-tx.pid
+LOGFILE=/var/log/pcam-gcm-tx.log
+PORT=5602
+VIDEO=/dev/video0
+MEDIA=/dev/media0
+ADDRESS=${PCAM_TX_ADDRESS_CIDR:-10.10.15.2/24}
+MAC=${PCAM_TX_MAC:-02:00:00:00:00:02}
+RX_PEER_FILE=${PCAM_RX_PEER_FILE:-/run/aes-gcm-rx-peer}
+SESSION_STATUS=0x43d00008
+
+find_interface() {
+    for path in /sys/class/net/*; do
+        interface="${path##*/}"
+        case "$interface" in
+            lo|wl*|can*|usb*|tun*|tap*|tailscale*|br*|docker*|veth*)
+                continue
+                ;;
+        esac
+        # Select the physical wired NIC without depending on its assigned
+        # name.  Virtual adapters (Tailscale/TUN/bridges) have no sysfs
+        # device, and Wi-Fi devices expose a wireless directory.
+        [ -e "$path/device" ] || continue
+        [ -d "$path/wireless" ] && continue
+        echo "$interface"
+        return 0
+    done
+    return 1
+}
+
+configure_network() {
+    interface="$(find_interface)" || return 1
+    ip link set "$interface" down || return 1
+    ip link set "$interface" address "$MAC" || return 1
+    ip addr flush dev "$interface"
+    ip addr add "$ADDRESS" dev "$interface" || return 1
+    ip link set "$interface" up || return 1
+    echo 16777216 >/proc/sys/net/core/wmem_max
+    echo 16777216 >/proc/sys/net/core/wmem_default
+}
+
+wait_for_camera() {
+    count=0
+    while [ "$count" -lt 30 ]; do
+        [ -c "$VIDEO" ] && [ -c "$MEDIA" ] && return 0
+        count=$((count + 1))
+        sleep 1
+    done
+    return 1
+}
+
+# Both SW3 modes require an active session before the first PL-direct frame.
+# Starting while the key/session gate is empty is forbidden even when SW3 is
+# OFF; OFF bypasses AES/GHASH payload processing, not session admission.
+#
+# Do not put a finite timeout here.  On a two-board cold boot the peer can
+# finish network/Wi-Fi/RSA setup after this service starts.  A finite wait used
+# to launch the daemon without a committed key; the daemon then exited once
+# and the video remained black until a manual service restart.
+wait_for_session_key() {
+    count=0
+    while true; do
+        status="$(devmem "$SESSION_STATUS" 32 2>/dev/null || true)"
+        if [ -n "$status" ] && [ $((status & 3)) -eq 3 ]; then
+            echo "AES session key ready before PL-direct video start"
+            return 0
+        fi
+        count=$((count + 1))
+        if [ $((count % 30)) -eq 0 ]; then
+            echo "Waiting for an authenticated AES session ($count seconds)"
+        fi
+        sleep 1
+    done
+}
+
+session_key_ready() {
+    status="$(devmem "$SESSION_STATUS" 32 2>/dev/null || true)"
+    [ -n "$status" ] && [ $((status & 3)) -eq 3 ]
+}
+
+learn_rx_peer_before_session() {
+    session_key_ready && return 0
+    rm -f "$RX_PEER_FILE"
+    while ! PCAM_RX_PEER_FILE="$RX_PEER_FILE" \
+            "$DAEMON" --discover-peer "$PORT"; do
+        echo "Waiting to learn RX from its live PCAM discovery packet"
+        sleep 1
+    done
+}
+
+supervise_daemon() {
+    child_pid=
+    trap '
+        if [ -n "$child_pid" ] && kill -0 "$child_pid" 2>/dev/null; then
+            kill "$child_pid" 2>/dev/null || true
+            wait "$child_pid" 2>/dev/null || true
+        fi
+        exit 0
+    ' TERM INT
+
+    until configure_network; do
+        echo "Wired network is not ready; retrying"
+        sleep 2
+    done
+
+    while true; do
+        until wait_for_camera && configure_camera; do
+            echo "Camera/PL-direct AES path is not ready; retrying"
+            sleep 2
+        done
+
+        # Learn the actual RX address before the session exists. This breaks
+        # the cold-boot dependency without a fixed peer IP or AP broadcast.
+        learn_rx_peer_before_session
+        wait_for_session_key
+
+        # V4L2 now dequeues the buffer after PL AES-GCM and Frame Buffer Write;
+        # userspace performs DMA_BUF synchronization before sending it.
+        PCAM_RAW_UDP=1 \
+        PCAM_RAW_HW_CSUM=1 \
+        PCAM_RX_PEER_FILE="$RX_PEER_FILE" \
+            "$DAEMON" "$PORT" "$VIDEO" &
+        child_pid=$!
+        wait "$child_pid"
+        result=$?
+        child_pid=
+        echo "Video transmitter exited with status $result; retrying in 2 seconds"
+        sleep 2
+    done
+}
+
+stop_daemon() {
+    [ -r "$PIDFILE" ] || return 0
+    pid="$(cat "$PIDFILE")"
+    if kill -0 "$pid" 2>/dev/null; then
+        kill "$pid" 2>/dev/null || true
+        count=0
+        while kill -0 "$pid" 2>/dev/null && [ "$count" -lt 50 ]; do
+            count=$((count + 1))
+            sleep 0.1
+        done
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+    rm -f "$PIDFILE"
+}
+
+configure_camera() {
+    media-ctl -d "$MEDIA" --set-v4l2 \
+        '"ov5640 0-003c":0[fmt:UYVY8_1X16/1280x720@1/30 field:none]' &&
+    media-ctl -d "$MEDIA" --set-v4l2 \
+        '"43c00000.mipi_csi2_rx_subsystem":0[fmt:UYVY8_1X16/1280x720 field:none]' &&
+    media-ctl -d "$MEDIA" --set-v4l2 \
+        '"43c00000.mipi_csi2_rx_subsystem":1[fmt:UYVY8_1X16/1280x720 field:none]' &&
+    v4l2-ctl -d "$VIDEO" --set-ctrl=power_line_frequency=2
+}
+
+case "$1" in
+start)
+    [ -r "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null && exit 0
+    mkdir -p /var/run /var/log
+    rm -f "$PIDFILE"
+    "$0" supervise >>"$LOGFILE" 2>&1 </dev/null &
+    echo $! >"$PIDFILE"
+    ;;
+supervise)
+    supervise_daemon
+    ;;
+stop)
+    stop_daemon
+    ;;
+restart)
+    "$0" stop
+    "$0" start
+    ;;
+status)
+    [ -r "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+    ;;
+*)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

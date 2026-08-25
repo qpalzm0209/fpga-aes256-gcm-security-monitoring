@@ -1,0 +1,255 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, "Segoe UI Variable", system-ui, sans-serif;
+  background: #060809;
+  color: #edf2ee;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #060809;
+}
+
+button,
+select {
+  font: inherit;
+}
+
+.topbar {
+  height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+  border-bottom: 1px solid #263137;
+  background: #080b0d;
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #36582f;
+  border-radius: 6px;
+  background: #10200f;
+  color: #78d65d;
+  font-weight: 800;
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
+.brand-copy h1,
+.brand-copy p {
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.brand-copy h1 {
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: 0.085em;
+}
+
+.brand-copy p {
+  margin-top: 3px;
+  color: #8a9690;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+}
+
+.status-badge {
+  min-width: 62px;
+  margin-left: auto;
+  padding: 6px 9px;
+  border: 1px solid #6b5427;
+  border-radius: 4px;
+  background: #251d0e;
+  color: #d7ae5d;
+  font: 700 9px "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+
+.status-badge.live {
+  border-color: #36582f;
+  background: #10200f;
+  color: #78d65d;
+}
+
+.status-badge.error {
+  border-color: #7a3a35;
+  background: #2b1110;
+  color: #ff9188;
+}
+
+.viewer-panel {
+  height: calc(100vh - 58px);
+  display: grid;
+  grid-template-rows: 50px minmax(0, 1fr) 72px;
+  margin: 12px;
+  border: 1px solid #263137;
+  background: #0b0f11;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #263137;
+  background: #0a0e10;
+}
+
+.controls label,
+.capture-info span {
+  color: #77b8c6;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.controls select {
+  min-width: 280px;
+  max-width: 48vw;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid #263137;
+  border-radius: 2px;
+  background: #060809;
+  color: #edf2ee;
+  font: 11px "JetBrains Mono", Consolas, monospace;
+}
+
+.controls button {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid #36582f;
+  border-radius: 2px;
+  background: #10200f;
+  color: #78d65d;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.controls button:hover {
+  background: #183016;
+}
+
+.controls button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+button:focus-visible,
+select:focus-visible {
+  outline: 2px solid #77b8c6;
+  outline-offset: 2px;
+}
+
+.video-stage {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #000;
+}
+
+.video-stage video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  background: #000;
+}
+
+.video-message {
+  position: absolute;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid #263137;
+  background: rgb(6 8 9 / 88%);
+  color: #8a9690;
+  font: 700 10px "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.1em;
+  text-align: center;
+}
+
+.video-message.hidden {
+  display: none;
+}
+
+.capture-info {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  border-top: 1px solid #263137;
+  background: #0a0e10;
+}
+
+.capture-info div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 14px;
+}
+
+.capture-info div + div {
+  border-left: 1px solid #263137;
+}
+
+.capture-info strong {
+  overflow: hidden;
+  color: #edf2ee;
+  font: 400 12px "JetBrains Mono", Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#captureStatus.active {
+  color: #78d65d;
+}
+
+#captureStatus.error {
+  color: #ff9188;
+}
+
+@media (max-width: 700px) {
+  .viewer-panel {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    margin: 6px;
+  }
+
+  .controls {
+    flex-wrap: wrap;
+  }
+
+  .controls select {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .capture-info {
+    grid-template-columns: 1fr;
+  }
+
+  .capture-info div + div {
+    border-top: 1px solid #263137;
+    border-left: 0;
+  }
+}
