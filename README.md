@@ -5,19 +5,31 @@ Zybo Z7-20 FPGA에서 카메라 영상을 실시간으로 암호화·복호화�
 
 ## 시스템 구성
 
-```mermaid
-flowchart LR
-    CAM[PCam / OV5640] --> TX[Zybo TX<br/>AES-256-GCM 암호화]
-    TX -->|UDP 5602<br/>AAD + Ciphertext + TAG| JETSON[Jetson Orin Nano<br/>L2 Bridge / 공격자]
-    JETSON --> RX[Zybo RX<br/>인증·복호화·오류 검출]
-    RX -->|HDMI| CAP[USB Capture]
-    CAP --> PCUI[PC 관제 UI]
-    JETSON --> JUI[Jetson 보안 대시보드]
+### 1. TX/RX 기본 보안 구성
 
-    JETSON -. Tamper / Replay / Weak-Key .-> JETSON
-```
+![카메라에서 AES-256-GCM 암호화 모듈과 복호화 모듈을 거쳐 관제장치로 전달되는 TX/RX 보안 통신 구성](./docs/images/01-secure-tx-rx-line.png)
+
+송신측 카메라 영상은 AES-256-GCM 암호화 모듈을 거쳐 암호화 통신 구간으로 전송됩니다. 수신측은 복호화 모듈에서 데이터의 기밀성과 무결성을 확인한 뒤 관제장치로 전달하며, TX와 RX의 세션 키는 ECDH 기반 키 교환으로 구성합니다.
+
+### 2. DDR 평문 비적재 하드웨어 암호화
+
+![카메라 영상이 DDR에 평문으로 적재되기 전에 FPGA RTL 암호화 회로에서 직접 암호화되는 구조](./docs/images/02-direct-hardware-encryption.png)
+
+카메라 데이터는 송신측 FPGA의 RTL 암호화 회로에서 먼저 암호화되므로 외부 DDR에 평문 영상이 적재되지 않습니다. Linux는 암호화된 데이터만 전달하며, 수신측 FPGA 역시 하드웨어 복호화 회로를 통해 검증·복호화한 결과를 관제장치로 출력합니다.
+
+### 3. 중간 공격자 기반 보안 성능 시험
+
+![암호화 전송 구간에 Jetson 중간 공격자를 배치한 보안 성능 시험 구성](./docs/images/03-mitm-security-test.png)
+
+보안 성능 시험에서는 암호화 전송 구간에 Jetson 기반 중간 공격자를 배치합니다. 정상 패킷 전달과 함께 변조, 리플레이, 취약 키 검색 공격을 수행하고 RX의 인증 실패·재전송 탐지·평문 출력 차단 동작을 검증합니다.
 
 정상 영상 데이터는 Jetson의 사용자 공간이나 WebSocket을 거치지 않습니다. Jetson의 커널 L2 브리지가 원래 목적지 MAC을 유지한 채 패킷을 전달하고, 대시보드는 별도의 관측·제어 경로를 사용합니다.
+
+### 4. RX 보안 관제 UI
+
+![RX 상태, 공격 이벤트, 인증 실패, 성능 지표와 AI 분석을 표시하는 보안 관제 UI](./docs/images/04-rx-monitoring-ui.png)
+
+RX 관제 UI는 영상 수신 상태와 FPS, 프레임 드롭, GCM 인증 실패, 리플레이·시퀀스·세션 이벤트를 실시간으로 표시합니다. 공격 이벤트와 RX 차단 결과를 함께 비교하고 보안 시스템 AI 분석 결과를 확인할 수 있습니다.
 
 ## 모듈 구성
 
@@ -91,4 +103,3 @@ FPGA Vivado/PetaLinux 빌드 및 SD/JTAG 절차는 [01번 모듈 README](./01.%2
 ## 보안 및 대용량 파일 정책
 
 저장소에는 소스와 재현 문서만 포함합니다. 실제 Wi-Fi 비밀번호, API 키, 개인키, 로컬 환경설정, GGUF/학습 모델, Vivado/PetaLinux 생성물, 부트 이미지와 압축 백업은 커밋하지 않습니다. 필요한 키와 설정은 각 장치에서 새로 생성해 사용하세요.
-
